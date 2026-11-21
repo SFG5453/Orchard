@@ -20,6 +20,8 @@
 
 package dev.sfg.orchard.mobile.ui.foldable
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,7 +54,7 @@ internal fun FoldableHomeHeader(auth: AuthState, onProfile: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = "Home",
+            text = tr("Home"),
             style = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
             color = CanopyColors.Text,
         )

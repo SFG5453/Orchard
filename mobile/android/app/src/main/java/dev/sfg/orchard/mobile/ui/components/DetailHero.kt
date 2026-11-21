@@ -29,6 +29,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -262,7 +264,7 @@ fun HeroPlayRow(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Rounded.PlayArrow,
-                    contentDescription = "Play",
+                    contentDescription = tr("Play"),
                     tint = playIconTint,
                     // The play glyph is visually left-heavy; nudge it to the optical centre.
                     modifier = Modifier.size(36.dp).offset(x = 2.dp),
@@ -332,13 +334,13 @@ fun HeroAbout(
             .animateContentSize(),
     ) {
         Text(
-            text = title,
+            text = tr(title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = CanopyColors.Text,
             modifier = Modifier.padding(bottom = 8.dp),
         )
         Text(
-            text = body,
+            text = tr(body),
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
             color = CanopyColors.Text.copy(alpha = 0.72f),
             maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
@@ -387,7 +389,7 @@ fun FeaturedReleaseCard(
                     maxLines = 1,
                 )
                 Text(
-                    text = item.title,
+                    text = tr(item.title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                     maxLines = 1,

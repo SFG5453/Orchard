@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -122,7 +124,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Orchard update",
+                                tr("Orchard update"),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = CanopyColors.Text,
                             )
@@ -139,7 +141,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                     ) {
                         Icon(
                             Icons.Rounded.Close,
-                            contentDescription = "Close update prompt",
+                            contentDescription = tr("Close update prompt"),
                             tint = CanopyColors.Muted,
                             modifier = Modifier.size(20.dp),
                         )
@@ -211,7 +213,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                                         shape = RoundedCornerShape(6.dp),
                                     ) {
                                         Text(
-                                            metadata.codename,
+                                            tr(metadata.codename),
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                             color = LocalAccent.current,
                                             maxLines = 1,
@@ -236,7 +238,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Release notes",
+                        tr("Release notes"),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,
@@ -280,7 +282,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                "Includes general performance improvements and bug fixes.",
+                                tr("Includes general performance improvements and bug fixes."),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = CanopyColors.Muted,
                                 modifier = Modifier.padding(14.dp),
@@ -305,7 +307,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                             .height(46.dp),
                     ) {
                         Text(
-                            "Not now",
+                            tr("Not now"),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                             color = CanopyColors.Muted,
                         )
@@ -329,7 +331,7 @@ internal fun UpdateAvailableDialog(state: UpdateState.Available, onInstall: (Mob
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            "Update now",
+                            tr("Update now"),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                         )
                     }

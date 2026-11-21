@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -211,7 +213,7 @@ internal fun LyricLines(
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            text = "These lyrics aren’t synced to the music.",
+                            text = tr("These lyrics aren’t synced to the music."),
                             color = Color.White.copy(alpha = 0.72f),
                             style = MaterialTheme.typography.labelMedium,
                         )
@@ -249,7 +251,7 @@ internal fun LyricLines(
                         val emphasis = animateFloatAsState(
                             targetValue = if (active) 1.015f else 1f,
                             animationSpec = tween(240),
-                            label = "Lyric emphasis",
+                            label = tr("Lyric emphasis"),
                         )
 
                         // One flat rest level like desktop, so upcoming lines stay readable.
@@ -321,7 +323,7 @@ internal fun LyricLines(
                                 )
                             } else {
                                 Text(
-                                    text = line.text,
+                                    text = tr(line.text),
                                     color = Color.White,
                                     textAlign = if (isAlternate) TextAlign.End else TextAlign.Start,
                                     modifier = Modifier.fillMaxWidth(),
@@ -381,7 +383,7 @@ internal fun LyricLines(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "Resume lyrics",
+                        text = tr("Resume lyrics"),
                         color = Color.White,
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     )

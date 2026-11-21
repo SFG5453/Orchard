@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -90,7 +92,7 @@ fun DeviceVolumeSlider(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.VolumeMute,
-                contentDescription = "Mute",
+                contentDescription = tr("Mute"),
                 tint = tint,
                 modifier = Modifier.size(18.dp),
             )
@@ -154,7 +156,7 @@ fun DeviceVolumeSlider(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
-                contentDescription = "Volume Up",
+                contentDescription = tr("Volume Up"),
                 tint = tint,
                 modifier = Modifier.size(20.dp),
             )

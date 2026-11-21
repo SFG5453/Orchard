@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -214,7 +216,7 @@ internal fun OrchardNavigation(
                 downloadedBytes = totalBytesUsed,
                 onDeleteAllDownloads = {
                     viewModel.removeAllDownloads()
-                    android.widget.Toast.makeText(context, "Downloads deleted", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, tr("Downloads deleted"), android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onRefreshCacheSize = viewModel::refreshCacheSize,
                 onSettings = viewModel::updateSettings,

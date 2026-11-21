@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.songlinks
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +66,7 @@ class SongLinksCoordinator(private val repository: SongLinksRepository) {
         is SongLinkTarget.Video -> LinkResolution.PlayTrack(
             Track(
                 id = target.videoId,
-                title = "YouTube Track",
+                title = tr("YouTube Track"),
                 artist = "",
                 artworkUrl = "https://i.ytimg.com/vi/${target.videoId}/hqdefault.jpg",
             ),

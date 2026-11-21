@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -186,7 +188,7 @@ internal fun OutputRoutePill(targets: PlaybackTargetState, onClick: () -> Unit, 
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = activeDeviceName,
+            text = tr(activeDeviceName),
             style =
                 MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Medium,

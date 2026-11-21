@@ -27,6 +27,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -111,7 +113,7 @@ fun DetailFloatingChrome(
             HeroCircleButton(
                 onClick = onBack,
                 icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = tr("Back"),
                 size = 44.dp,
                 glass = !transparent,
             )

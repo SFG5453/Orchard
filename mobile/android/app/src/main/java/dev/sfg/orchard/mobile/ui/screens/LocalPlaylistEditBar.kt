@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -105,33 +107,33 @@ internal fun PlaylistEditBar(
             label = { Text(if (editing) "Done" else "Edit") },
         )
         if (local != null && editing) {
-            AssistChip(onClick = local.onAddSongs, label = { Text("Add songs") })
-            AssistChip(onClick = local.onAddFolder, label = { Text("Add folder") })
-            AssistChip(onClick = local.onPickCover, label = { Text("Cover") })
-            local.onClearCover?.let { AssistChip(onClick = it, label = { Text("Auto cover") }) }
-            AssistChip(onClick = { renaming = true }, label = { Text("Rename") })
-            AssistChip(onClick = { confirmingDelete = true }, label = { Text("Delete") })
+            AssistChip(onClick = local.onAddSongs, label = { Text(tr("Add songs")) })
+            AssistChip(onClick = local.onAddFolder, label = { Text(tr("Add folder")) })
+            AssistChip(onClick = local.onPickCover, label = { Text(tr("Cover")) })
+            local.onClearCover?.let { AssistChip(onClick = it, label = { Text(tr("Auto cover")) }) }
+            AssistChip(onClick = { renaming = true }, label = { Text(tr("Rename")) })
+            AssistChip(onClick = { confirmingDelete = true }, label = { Text(tr("Delete")) })
         }
     }
     if (local != null && renaming) {
         var name by remember { mutableStateOf(title) }
         AlertDialog(
             onDismissRequest = { renaming = false },
-            title = { Text("Rename playlist") },
+            title = { Text(tr("Rename playlist")) },
             text = { OutlinedTextField(value = name, onValueChange = { name = it.take(150) }, singleLine = true) },
             confirmButton = {
-                TextButton(enabled = name.isNotBlank(), onClick = { local.onRename(name); renaming = false }) { Text("Rename") }
+                TextButton(enabled = name.isNotBlank(), onClick = { local.onRename(name); renaming = false }) { Text(tr("Rename")) }
             },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text(tr("Cancel")) } },
         )
     }
     if (local != null && confirmingDelete) {
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
             title = { Text("Delete “$title”?") },
-            text = { Text("Your songs stay on your phone. Only the playlist goes away.") },
-            confirmButton = { TextButton(onClick = { confirmingDelete = false; local.onDelete() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") } },
+            text = { Text(tr("Your songs stay on your phone. Only the playlist goes away.")) },
+            confirmButton = { TextButton(onClick = { confirmingDelete = false; local.onDelete() }) { Text(tr("Delete")) } },
+            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text(tr("Cancel")) } },
         )
     }
 }

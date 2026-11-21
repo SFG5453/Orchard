@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -50,12 +52,12 @@ internal fun FrostedSectionHeader(title: String, badge: String? = null) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = title,
+            text = tr(title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = CanopyColors.Text,
         )
         badge?.let {
-            Text(text = it, style = MaterialTheme.typography.labelSmall, color = CanopyColors.Muted)
+            Text(text = tr(it), style = MaterialTheme.typography.labelSmall, color = CanopyColors.Muted)
         }
     }
 }
@@ -82,7 +84,7 @@ internal fun FrostedMessageBanner(message: String, isError: Boolean = false) {
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                text = message,
+                text = tr(message),
                 style = MaterialTheme.typography.bodyMedium,
                 color = CanopyColors.Text,
             )

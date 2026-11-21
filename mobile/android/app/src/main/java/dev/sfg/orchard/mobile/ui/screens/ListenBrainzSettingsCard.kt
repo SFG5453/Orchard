@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,10 +75,10 @@ fun ListenBrainzSettingsCard(
             when (state) {
                 ListenBrainzState.SignedOut,
                 is ListenBrainzState.Error ->
-                    IntegrationAction("Connect ListenBrainz", onClick = { showTokenDialog = true })
-                ListenBrainzState.Validating -> IntegrationAction("Validating token…", onClick = {})
+                    IntegrationAction(tr("Connect ListenBrainz"), onClick = { showTokenDialog = true })
+                ListenBrainzState.Validating -> IntegrationAction(tr("Validating token…"), onClick = {})
                 is ListenBrainzState.Connected ->
-                    IntegrationAction("Sign out of ListenBrainz", destructive = true, onClick = onDisconnect)
+                    IntegrationAction(tr("Sign out of ListenBrainz"), destructive = true, onClick = onDisconnect)
             }
         }
     }
@@ -85,11 +87,11 @@ fun ListenBrainzSettingsCard(
         var token by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showTokenDialog = false },
-            title = { Text("ListenBrainz user token", color = CanopyColors.Text) },
+            title = { Text(tr("ListenBrainz user token"), color = CanopyColors.Text) },
             text = {
                 Column {
                     Text(
-                        "Paste the token from listenbrainz.org/settings. It is encrypted on this device.",
+                        tr("Paste the token from listenbrainz.org/settings. It is encrypted on this device."),
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -111,12 +113,12 @@ fun ListenBrainzSettingsCard(
                         showTokenDialog = false
                     },
                 ) {
-                    Text("Connect", color = LocalAccent.current)
+                    Text(tr("Connect"), color = LocalAccent.current)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showTokenDialog = false }) {
-                    Text("Cancel", color = CanopyColors.Muted)
+                    Text(tr("Cancel"), color = CanopyColors.Muted)
                 }
             },
             containerColor = CanopyColors.Surface,

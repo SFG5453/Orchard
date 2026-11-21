@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,7 +69,7 @@ internal fun NewPlaylistSheet(
         dragHandle = { BottomSheetDefaults.DragHandle(color = CanopyColors.Muted.copy(alpha = 0.4f)) },
     ) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
-            Text("New playlist", style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
+            Text(tr("New playlist"), style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -76,7 +78,7 @@ internal fun NewPlaylistSheet(
                     onClick = { local = false },
                     label = { Text(service ?: "Online") },
                 )
-                FilterChip(selected = local, onClick = { local = true }, label = { Text("On this phone") })
+                FilterChip(selected = local, onClick = { local = true }, label = { Text(tr("On this phone")) })
             }
             Spacer(Modifier.height(8.dp))
             Text(
@@ -89,16 +91,16 @@ internal fun NewPlaylistSheet(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it.take(150) },
-                label = { Text("Playlist name") },
+                label = { Text(tr("Playlist name")) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (local) {
-                    OutlinedButton(enabled = canCreate, onClick = { onCreate(title, true, true) }) { Text("Create and add songs") }
+                    OutlinedButton(enabled = canCreate, onClick = { onCreate(title, true, true) }) { Text(tr("Create and add songs")) }
                 }
-                Button(enabled = canCreate, onClick = { onCreate(title, local, false) }) { Text("Create") }
+                Button(enabled = canCreate, onClick = { onCreate(title, local, false) }) { Text(tr("Create")) }
             }
         }
     }

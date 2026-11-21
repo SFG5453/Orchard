@@ -20,6 +20,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -85,9 +87,9 @@ internal fun PlaylistPickerSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
         ) {
-            Text("Add to playlist", style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
+            Text(tr("Add to playlist"), style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
             Text(
-                track.title,
+                tr(track.title),
                 style = MaterialTheme.typography.bodyMedium,
                 color = CanopyColors.Muted,
                 maxLines = 1,
@@ -98,13 +100,13 @@ internal fun PlaylistPickerSheet(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Filter playlists") },
+                label = { Text(tr("Filter playlists")) },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear filter")
+                            Icon(Icons.Rounded.Close, contentDescription = tr("Clear filter"))
                         }
                     }
                 },

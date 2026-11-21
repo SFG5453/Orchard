@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.support
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -112,7 +114,7 @@ internal fun SupportComposer(
         )
         Field(
             value = draft.title,
-            placeholder = "Short title, like \"Lyrics stop after a skip\"",
+            placeholder = tr("Short title, like \"Lyrics stop after a skip\""),
             singleLine = true,
             onChange = { text -> service.updateDraft { it.copy(title = text.take(140)) } },
         )
@@ -136,7 +138,7 @@ internal fun SupportComposer(
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("Include system details", color = SettingsStyle.Title, fontSize = 15.sp)
+                Text(tr("Include system details"), color = SettingsStyle.Title, fontSize = 15.sp)
                 Text(
                     if (showDiagnostics) "Hide details" else "App version, Android version and device model. Tap to see them.",
                     color = SettingsStyle.Description,
@@ -149,7 +151,7 @@ internal fun SupportComposer(
         if (showDiagnostics && draft.diagnostics) {
             val preview = remember(page) { supportDiagnostics(context, page).toString(2) }
             Text(
-                preview,
+                tr(preview),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 color = SettingsStyle.Description,
@@ -158,7 +160,7 @@ internal fun SupportComposer(
         }
 
         if (state.error.isNotBlank()) {
-            Text(state.error, color = Color(0xFFE8A598), fontSize = 13.sp)
+            Text(tr(state.error), color = Color(0xFFE8A598), fontSize = 13.sp)
         }
         Text(
             "Posted publicly as an issue on ${state.repository.ifBlank { "GitHub" }} by @${state.github?.login.orEmpty()}" +
@@ -167,7 +169,7 @@ internal fun SupportComposer(
             fontSize = 12.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 24.dp)) {
-            SettingsPill("Discard", onClick = service::discardDraft, modifier = Modifier.weight(1f), destructive = true)
+            SettingsPill(tr("Discard"), onClick = service::discardDraft, modifier = Modifier.weight(1f), destructive = true)
             SettingsPill(
                 if (state.submitting) "Sending…" else "Send report",
                 onClick = { service.submit(page, onSent) },
@@ -196,7 +198,7 @@ private fun Field(value: String, placeholder: String, onChange: (String) -> Unit
                     .border(1.dp, SettingsStyle.PanelBorder, shape)
                     .padding(horizontal = 14.dp, vertical = 13.dp),
             ) {
-                if (value.isEmpty()) Text(placeholder, color = SettingsStyle.Caption, fontSize = 15.sp)
+                if (value.isEmpty()) Text(tr(placeholder), color = SettingsStyle.Caption, fontSize = 15.sp)
                 field()
             }
         },
@@ -224,7 +226,7 @@ private fun ScreenshotCard(
                 val image = remember(screenshot) { screenshot.asImageBitmap() }
                 Image(
                     image,
-                    contentDescription = "Screenshot preview",
+                    contentDescription = tr("Screenshot preview"),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.width(84.dp).heightIn(max = 168.dp).clip(RoundedCornerShape(10.dp)),
                 )
@@ -260,6 +262,6 @@ private fun Chip(icon: ImageVector, label: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(icon, contentDescription = null, tint = SettingsStyle.SageSoft, modifier = Modifier.size(16.dp))
-        Text(label, color = SettingsStyle.Title, fontSize = 13.sp, style = MaterialTheme.typography.labelLarge)
+        Text(tr(label), color = SettingsStyle.Title, fontSize = 13.sp, style = MaterialTheme.typography.labelLarge)
     }
 }

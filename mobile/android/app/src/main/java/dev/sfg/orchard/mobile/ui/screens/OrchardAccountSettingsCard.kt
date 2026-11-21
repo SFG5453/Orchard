@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,25 +67,25 @@ fun OrchardAccountSettingsCard() {
         }
         if (state.error.isNotBlank()) {
             Spacer(Modifier.height(10.dp))
-            Text(state.error, color = Color(0xFFFF7777), style = MaterialTheme.typography.bodySmall)
+            Text(tr(state.error), color = Color(0xFFFF7777), style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(12.dp))
         when {
             state.signingIn -> {
-                Text("Finish signing in in your browser.", style = MaterialTheme.typography.bodySmall)
+                Text(tr("Finish signing in in your browser."), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(10.dp))
-                SettingsPill("Cancel", onClick = account::cancelSignIn, modifier = Modifier.fillMaxWidth())
+                SettingsPill(tr("Cancel"), onClick = account::cancelSignIn, modifier = Modifier.fillMaxWidth())
             }
             state.signedIn -> {
-                SettingsPill("Sign out", onClick = account::signOut,
+                SettingsPill(tr("Sign out"), onClick = account::signOut,
                     modifier = Modifier.fillMaxWidth(), destructive = true)
                 Spacer(Modifier.height(20.dp))
                 GithubLinkRow()
                 Spacer(Modifier.height(20.dp))
-                Text("Devices", style = MaterialTheme.typography.titleMedium)
+                Text(tr("Devices"), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 if (state.loadingDevices && state.devices.isEmpty()) {
-                    Text("Loading devices…", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Loading devices…"), style = MaterialTheme.typography.bodySmall)
                 }
                 state.devices.forEach { device ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -96,12 +98,12 @@ fun OrchardAccountSettingsCard() {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (!device.current) {
-                            SettingsPill("Remove", onClick = { account.removeDevice(device) })
+                            SettingsPill(tr("Remove"), onClick = { account.removeDevice(device) })
                         }
                     }
                 }
             }
-            else -> SettingsPill("Sign in with Google", onClick = account::signIn,
+            else -> SettingsPill(tr("Sign in with Google"), onClick = account::signIn,
                 modifier = Modifier.fillMaxWidth())
         }
     }
@@ -127,8 +129,8 @@ private fun GithubLinkRow() {
     )
     Spacer(Modifier.height(10.dp))
     when {
-        github != null -> SettingsPill("Unlink GitHub", onClick = support::unlinkGithub, modifier = Modifier.fillMaxWidth())
-        state.linking -> SettingsPill("Cancel", onClick = support::cancelGithubLink, modifier = Modifier.fillMaxWidth())
-        else -> SettingsPill("Link GitHub", onClick = support::linkGithub, modifier = Modifier.fillMaxWidth())
+        github != null -> SettingsPill(tr("Unlink GitHub"), onClick = support::unlinkGithub, modifier = Modifier.fillMaxWidth())
+        state.linking -> SettingsPill(tr("Cancel"), onClick = support::cancelGithubLink, modifier = Modifier.fillMaxWidth())
+        else -> SettingsPill(tr("Link GitHub"), onClick = support::linkGithub, modifier = Modifier.fillMaxWidth())
     }
 }

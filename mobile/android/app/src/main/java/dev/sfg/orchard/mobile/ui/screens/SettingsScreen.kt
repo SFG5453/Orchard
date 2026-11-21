@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -276,21 +278,21 @@ private fun SettingsHeader(
                     .offset(x = (-8).dp)
                     .size(44.dp)
                     .clip(CircleShape)
-                    .clickable(role = Role.Button, onClickLabel = "Back", onClick = onBack),
+                    .clickable(role = Role.Button, onClickLabel = tr("Back"), onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = SettingsStyle.Title)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"), tint = SettingsStyle.Title)
             }
         }
         Text(
-            title,
+            tr(title),
             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp, fontWeight = FontWeight.SemiBold),
             color = SettingsStyle.Title,
             modifier = Modifier.padding(start = 4.dp),
         )
         if (blurb.isNotEmpty()) {
             Text(
-                blurb,
+                tr(blurb),
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = SettingsStyle.Description,
                 modifier = Modifier.padding(start = 4.dp, top = 6.dp),

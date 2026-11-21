@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -100,7 +102,7 @@ internal fun LibraryCreateSheet(
         ) {
             Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 28.dp)) {
                 Text(
-                    "Create",
+                    tr("Create"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                     modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
@@ -164,8 +166,8 @@ private fun CreateRow(icon: ImageVector, title: String, subtitle: String, accent
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = CanopyColors.Text)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = CanopyColors.Muted)
+            Text(tr(title), style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = CanopyColors.Text)
+            Text(tr(subtitle), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = CanopyColors.Muted)
         }
     }
 }

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,7 +50,7 @@ internal fun ArtworkQualityRows(settings: OrchardSettings, onSettings: (OrchardS
         onSettings(settings.copy(cellularAnimatedArtworkQuality = it))
     }
     Text(
-        "Quality choices apply when multiple qualities are available. Saved covers keep their downloaded quality. " +
+        tr("Quality choices apply when multiple qualities are available. Saved covers keep their downloaded quality. ") +
             "Metered Wi-Fi uses the mobile data setting.",
         color = SettingsStyle.Description,
         fontSize = 13.sp,

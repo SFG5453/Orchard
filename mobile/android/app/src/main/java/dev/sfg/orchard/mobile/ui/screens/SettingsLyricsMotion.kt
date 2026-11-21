@@ -5,6 +5,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BlurOn
@@ -20,35 +22,35 @@ internal fun LyricsMotionSection(
     onSettings: (OrchardSettings) -> Unit,
     labelIndex: Int,
 ) {
-    SectionLabel("Lyrics motion", labelIndex)
+    SectionLabel(tr("Lyrics motion"), labelIndex)
     SettingsPanel(index = labelIndex + 1) {
         ToggleRow(
-            title = "Lyrics under the title",
-            subtitle = "Show the current line below the song title in the player",
+            title = tr("Lyrics under the title"),
+            subtitle = tr("Show the current line below the song title in the player"),
             icon = Icons.Rounded.MusicNote,
             checked = settings.lyricsUnderTitle,
             onChecked = { onSettings(settings.copy(lyricsUnderTitle = it)) },
         )
         PanelDivider()
         ToggleRow(
-            title = "Blur distant lines",
-            subtitle = "Blur lines further from the current one. Needs Android 12 or newer",
+            title = tr("Blur distant lines"),
+            subtitle = tr("Blur lines further from the current one. Needs Android 12 or newer"),
             icon = Icons.Rounded.BlurOn,
             checked = settings.lyricsFocusBlur,
             onChecked = { onSettings(settings.copy(lyricsFocusBlur = it)) },
         )
         PanelDivider()
         ToggleRow(
-            title = "Fade distant lines",
-            subtitle = "Dim lines further from the current one",
+            title = tr("Fade distant lines"),
+            subtitle = tr("Dim lines further from the current one"),
             icon = Icons.Rounded.Contrast,
             checked = settings.lyricsDistanceFade,
             onChecked = { onSettings(settings.copy(lyricsDistanceFade = it)) },
         )
         PanelDivider()
         ToggleRow(
-            title = "Staggered scrolling",
-            subtitle = "Lines glide into place one after another",
+            title = tr("Staggered scrolling"),
+            subtitle = tr("Lines glide into place one after another"),
             icon = Icons.Rounded.SwapVert,
             checked = settings.lyricsStaggeredScroll,
             onChecked = { onSettings(settings.copy(lyricsStaggeredScroll = it)) },

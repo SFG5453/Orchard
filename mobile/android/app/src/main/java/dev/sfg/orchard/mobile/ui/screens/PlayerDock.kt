@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -120,7 +122,7 @@ internal fun PlayerDock(
                 )
                 .clip(CircleShape)
                 .selectable(selected = trayOpen, role = Role.Button, onClick = onToggleTray)
-                .semantics { contentDescription = "Playback modes" },
+                .semantics { contentDescription = tr("Playback modes") },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,7 +82,7 @@ internal fun SectionHeading(text: String, action: String? = null, onAction: () -
         )
         if (action != null) {
             Text(
-                action,
+                tr(action),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                 color = SettingsStyle.Title,
                 modifier = Modifier
@@ -102,7 +104,7 @@ internal fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) 
         items(SearchScope.entries) { scope ->
             val on = scope == selected
             Text(
-                scope.label,
+                tr(scope.label),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                 color = if (on) PillOnText else SettingsStyle.SegmentIdle,
                 modifier = Modifier
@@ -135,9 +137,9 @@ internal fun TopResultCard(item: CatalogItem, onOpen: () -> Unit, onPlay: () -> 
         ArtworkTile(item.artworkUrl, item.title, Modifier.size(96.dp), radius = if (artist) 48 else 10)
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Top result", style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp), color = SettingsStyle.Caption)
+            Text(tr("Top result"), style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp), color = SettingsStyle.Caption)
             Text(
-                item.title,
+                tr(item.title),
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp, fontWeight = FontWeight.SemiBold),
                 color = SettingsStyle.Title,
                 maxLines = 2,
@@ -145,7 +147,7 @@ internal fun TopResultCard(item: CatalogItem, onOpen: () -> Unit, onPlay: () -> 
                 modifier = Modifier.padding(top = 2.dp),
             )
             Text(
-                item.kindLabel(),
+                tr(item.kindLabel()),
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                 color = SettingsStyle.Description,
                 maxLines = 1,
@@ -176,7 +178,7 @@ internal fun <T : CatalogItem> CoverShelf(entries: List<T>, subtitle: (T) -> Str
             ) {
                 ArtworkTile(entry.artworkUrl, entry.title, Modifier.size(size.dp), radius = if (round) size / 2 else 10)
                 Text(
-                    entry.title,
+                    tr(entry.title),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
                     color = SettingsStyle.Title,
                     maxLines = 1,
@@ -187,7 +189,7 @@ internal fun <T : CatalogItem> CoverShelf(entries: List<T>, subtitle: (T) -> Str
                 val sub = subtitle(entry)
                 if (!round && sub.isNotBlank()) {
                     Text(
-                        sub,
+                        tr(sub),
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         color = SettingsStyle.Description,
                         maxLines = 1,

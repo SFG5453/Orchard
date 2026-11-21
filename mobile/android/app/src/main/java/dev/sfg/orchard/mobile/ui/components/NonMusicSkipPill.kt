@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -83,14 +85,14 @@ fun NonMusicSkipPill(modifier: Modifier = Modifier) {
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.14f))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Skip non-music") { skip.onSkip() }
+                .clickable(role = Role.Button, onClickLabel = tr("Skip non-music")) { skip.onSkip() }
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Text(
-                "Skip non-music",
+                tr("Skip non-music"),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                 color = Color.White,
             )

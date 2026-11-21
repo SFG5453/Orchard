@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -73,13 +75,13 @@ fun QobuzSettingsCard(
             ) {
                 Column(Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
-                        text = "Qobuz streaming",
+                        text = tr("Qobuz streaming"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = CanopyColors.Text,
                     )
                     Text(
-                        "Lossless and Hi-Res audio",
+                        tr("Lossless and Hi-Res audio"),
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -96,7 +98,7 @@ fun QobuzSettingsCard(
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = "Requires a Qobuz subscription, your own Qobuz API app, and Audio quality set to Max.",
+                text = tr("Requires a Qobuz subscription, your own Qobuz API app, and Audio quality set to Max."),
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
                 lineHeight = 18.sp,
@@ -105,7 +107,7 @@ fun QobuzSettingsCard(
             if (status.lastError.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = status.lastError,
+                    text = tr(status.lastError),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -114,11 +116,11 @@ fun QobuzSettingsCard(
             Spacer(Modifier.height(14.dp))
 
             if (!isConnected) {
-                IntegrationAction("Connect Qobuz", onClick = onConnect)
+                IntegrationAction(tr("Connect Qobuz"), onClick = onConnect)
             } else {
                 // Quality options row
                 Text(
-                    text = "Streaming quality",
+                    text = tr("Streaming quality"),
                     style = MaterialTheme.typography.labelMedium,
                     color = CanopyColors.MutedStrong,
                     fontWeight = FontWeight.SemiBold,
@@ -133,7 +135,7 @@ fun QobuzSettingsCard(
 
                 Spacer(Modifier.height(12.dp))
 
-                IntegrationAction("Sign out of Qobuz", destructive = true, onClick = onDisconnect)
+                IntegrationAction(tr("Sign out of Qobuz"), destructive = true, onClick = onDisconnect)
             }
         }
     }

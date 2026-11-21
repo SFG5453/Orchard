@@ -1,5 +1,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.clickable
@@ -31,7 +33,7 @@ internal fun EqualizerRow(settings: OrchardSettings, onSettings: (OrchardSetting
     val maxActive = LocalMaxActive.current
 
     SettingsRow(
-        title = "Audio Equalizer",
+        title = tr("Audio Equalizer"),
         enabled = !maxActive,
         subtitle = if (maxActive) {
             "Unavailable while audio quality is Max"
@@ -78,7 +80,7 @@ private fun EqualizerContent(config: EqualizerConfig, onConfigChange: (Equalizer
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            "Equalizer",
+            tr("Equalizer"),
             style = MaterialTheme.typography.headlineMedium,
             color = CanopyColors.Text,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -108,7 +110,7 @@ private fun EqualizerContent(config: EqualizerConfig, onConfigChange: (Equalizer
             ) {
                 EQ_PRESETS.forEach { preset ->
                     DropdownMenuItem(
-                        text = { Text(preset.label) },
+                        text = { Text(tr(preset.label)) },
                         onClick = {
                             onConfigChange(
                                 config.copy(
@@ -164,7 +166,7 @@ private fun EqualizerContent(config: EqualizerConfig, onConfigChange: (Equalizer
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             ) {
                 Text(
-                    text = band.label,
+                    text = tr(band.label),
                     color = CanopyColors.Text,
                     modifier = Modifier.width(48.dp),
                     textAlign = TextAlign.End

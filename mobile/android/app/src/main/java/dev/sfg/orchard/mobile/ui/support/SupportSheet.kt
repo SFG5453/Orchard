@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.support
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -128,15 +130,15 @@ internal fun SupportSheet(ui: SupportUi, page: String) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 !accountState.signedIn -> Gate(
-                    title = "Sign in to report a bug",
-                    text = "Reports go through your Orchard account, so Orchard can tell you when someone replies, a fix lands, or the report closes.",
+                    title = tr("Sign in to report a bug"),
+                    text = tr("Reports go through your Orchard account, so Orchard can tell you when someone replies, a fix lands, or the report closes."),
                     action = if (accountState.signingIn) "Cancel" else "Sign in with Google",
                     onAction = if (accountState.signingIn) account::cancelSignIn else account::signIn,
                     error = accountState.error,
                 )
                 state.github == null -> Gate(
-                    title = "Link your GitHub account",
-                    text = "Reports become public GitHub issues under your name, so maintainers can ask you questions. Orchard only reads your GitHub username and avatar.",
+                    title = tr("Link your GitHub account"),
+                    text = tr("Reports become public GitHub issues under your name, so maintainers can ask you questions. Orchard only reads your GitHub username and avatar."),
                     action = if (state.linking) "Cancel" else "Link GitHub",
                     onAction = if (state.linking) ui.service::cancelGithubLink else ui.service::linkGithub,
                     hint = if (state.linking) "Finish in your browser. Orchard picks it up on its own." else "",
@@ -178,7 +180,7 @@ private fun ReportsButton(unread: Int, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(Icons.Rounded.Inbox, contentDescription = null, tint = SettingsStyle.SageSoft, modifier = Modifier.size(18.dp))
-        Text("Reports", color = SettingsStyle.Title, fontSize = 14.sp)
+        Text(tr("Reports"), color = SettingsStyle.Title, fontSize = 14.sp)
         if (unread > 0) UnreadDot()
     }
 }
@@ -196,12 +198,12 @@ private fun Gate(title: String, text: String, action: String, onAction: () -> Un
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
     ) {
         Icon(Icons.Rounded.BugReport, contentDescription = null, tint = SettingsStyle.SageSoft, modifier = Modifier.size(40.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        Text(tr(title), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = SettingsStyle.Title, textAlign = TextAlign.Center)
         Text(text, style = MaterialTheme.typography.bodyMedium, color = SettingsStyle.Description, textAlign = TextAlign.Center)
         SettingsPill(action, onClick = onAction, modifier = Modifier.fillMaxWidth())
-        if (hint.isNotBlank()) Text(hint, style = MaterialTheme.typography.bodySmall, color = SettingsStyle.Caption)
-        if (error.isNotBlank()) Text(error, style = MaterialTheme.typography.bodySmall, color = Color(0xFFE8A598), textAlign = TextAlign.Center)
+        if (hint.isNotBlank()) Text(tr(hint), style = MaterialTheme.typography.bodySmall, color = SettingsStyle.Caption)
+        if (error.isNotBlank()) Text(tr(error), style = MaterialTheme.typography.bodySmall, color = Color(0xFFE8A598), textAlign = TextAlign.Center)
     }
 }
 
@@ -216,7 +218,7 @@ internal fun stateLabel(report: SupportReport): String = when {
 private fun ReportList(state: SupportState, onNew: () -> Unit, onOpen: (String) -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
         SettingsPanel {
-            ActionRow(title = "New report", subtitle = "Bug, idea or feedback", onClick = onNew, icon = Icons.Rounded.Add)
+            ActionRow(title = tr("New report"), subtitle = tr("Bug, idea or feedback"), onClick = onNew, icon = Icons.Rounded.Add)
         }
         Column(Modifier.padding(top = 16.dp)) {
             if (state.reports.isEmpty()) {
@@ -251,7 +253,7 @@ private fun ReportRow(report: SupportReport, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                report.title,
+                tr(report.title),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = 15.sp,
                     fontWeight = if (report.unread > 0) FontWeight.SemiBold else FontWeight.Medium,

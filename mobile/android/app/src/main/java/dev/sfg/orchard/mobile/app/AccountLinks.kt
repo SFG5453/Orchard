@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
@@ -39,11 +41,11 @@ internal class AccountLinks(
     }
 
     fun completeLastfmConnection() = scope.launch {
-        if (!graph.lastfm.complete()) showWarning("Approve Orchard on Last.fm, then try again.")
+        if (!graph.lastfm.complete()) showWarning(tr("Approve Orchard on Last.fm, then try again."))
     }
 
     fun connectListenBrainz(token: String) = scope.launch {
-        if (!graph.listenBrainz.connect(token)) showWarning("ListenBrainz did not accept that token.")
+        if (!graph.listenBrainz.connect(token)) showWarning(tr("ListenBrainz did not accept that token."))
     }
 
     private fun Context.openUrl(url: String) {

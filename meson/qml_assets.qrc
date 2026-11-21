@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="/qt/qml/Orchard">
+    <file alias="app/i18n/es.json">../app/i18n/es.json</file>
     <file alias="app/qml/assets/orchard-logo.png">../app/qml/assets/orchard-logo.png</file>
     <file alias="app/qml/assets/sfg545.gif">../app/qml/assets/sfg545.gif</file>
     <file alias="app/qml/assets/fonts/inter_regular.ttf">../app/qml/assets/fonts/inter_regular.ttf</file>

@@ -44,7 +44,11 @@ class LyricsTranslator final : public QObject {
   Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
   // "standard" (small, quick) or "high" (larger models, better lines).
   Q_PROPERTY(QString quality READ quality WRITE setQuality NOTIFY qualityChanged)
+  // ISO 639-3 code, or "auto" for English <-> Spanish.
   Q_PROPERTY(QString targetLanguage READ targetLanguage WRITE setTargetLanguage NOTIFY targetLanguageChanged)
+  // Language the current song is translated into; resolves "auto".
+  Q_PROPERTY(QString activeTarget READ activeTarget NOTIFY activeTargetChanged)
+  Q_PROPERTY(QString activeTargetName READ activeTargetName NOTIFY activeTargetChanged)
   // Use Apple Music's own translation for Apple lyrics; the selected provider covers everything else.
   Q_PROPERTY(bool preferAppleTranslation READ preferAppleTranslation WRITE setPreferAppleTranslation NOTIFY providerChanged)
   Q_PROPERTY(QString provider READ provider WRITE setProvider NOTIFY providerChanged)
@@ -72,6 +76,8 @@ public:
   void setEnabled(bool enabled);
   [[nodiscard]] QString targetLanguage() const { return m_targetLanguage; }
   void setTargetLanguage(const QString &language);
+  [[nodiscard]] QString activeTarget() const { return m_activeTarget; }
+  [[nodiscard]] QString activeTargetName() const;
   [[nodiscard]] QString quality() const { return m_quality; }
   void setQuality(const QString &quality);
   [[nodiscard]] bool preferAppleTranslation() const { return m_preferApple; }
@@ -102,6 +108,7 @@ signals:
   void enabledChanged();
   void qualityChanged();
   void targetLanguageChanged();
+  void activeTargetChanged();
   void providerChanged();
   void stateChanged();
   void packsChanged();
@@ -142,6 +149,7 @@ private:
   bool m_enabled{false};
   bool m_preferApple{false};
   QString m_targetLanguage{QStringLiteral("eng")};
+  QString m_activeTarget{QStringLiteral("eng")};
   QString m_quality{QStringLiteral("standard")};
   QString m_provider{QStringLiteral("local")};
   QString m_model;

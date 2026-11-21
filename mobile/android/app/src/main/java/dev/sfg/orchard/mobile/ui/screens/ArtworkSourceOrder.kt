@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,7 +62,7 @@ internal fun ArtworkSourceOrder(settings: OrchardSettings, onSettings: (OrchardS
         onSettings(settings.copy(artworkSourceOrder = reordered.flatten()))
     }
     Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-        RowTitle("Artwork source order")
+        RowTitle(tr("Artwork source order"))
         RowSubtitle(
             if (apple) "Try sources from top to bottom for moving artwork. Apple Music replaces m8tec and boidu while you're signed in"
             else "Try sources from top to bottom for moving artwork",
@@ -70,7 +72,7 @@ internal fun ArtworkSourceOrder(settings: OrchardSettings, onSettings: (OrchardS
                 val label = if (row.size > 1 || (apple && row.single() != ArtworkSource.SPOTIFY)) "Apple Music" else row.single().label
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(label, color = SettingsStyle.Title, modifier = Modifier.weight(1f))
+                    Text(tr(label), color = SettingsStyle.Title, modifier = Modifier.weight(1f))
                     IconButton(onClick = { move(index, index - 1) }, enabled = index > 0) {
                         Icon(Icons.Rounded.ArrowUpward, contentDescription = "Move $label up")
                     }

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,6 +60,6 @@ fun OrchardWordmark(modifier: Modifier = Modifier) {
     Row(modifier) {
         OrchardMark(Modifier.size(28.dp))
         Spacer(Modifier.width(9.dp))
-        Text("Orchard", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+        Text(tr("Orchard"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
     }
 }

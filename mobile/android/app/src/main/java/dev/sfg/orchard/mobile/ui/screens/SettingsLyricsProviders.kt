@@ -5,6 +5,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,10 +44,10 @@ internal fun LyricsProvidersSection(
         onSettings(settings.copy(lyricsProviders = reordered))
     }
 
-    SectionLabel("Lyrics providers", labelIndex)
+    SectionLabel(tr("Lyrics providers"), labelIndex)
     SettingsPanel(index = labelIndex + 1) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            RowSubtitle("Try enabled providers from top to bottom. The first lyrics found are used. You can also choose a source for one song in the lyrics player.")
+            RowSubtitle(tr("Try enabled providers from top to bottom. The first lyrics found are used. You can also choose a source for one song in the lyrics player."))
         }
         providers.forEachIndexed { index, config ->
             PanelDivider()

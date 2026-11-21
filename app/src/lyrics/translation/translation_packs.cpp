@@ -20,6 +20,7 @@
 #include "translation_packs.h"
 #include "translation/lyric_language.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -105,7 +106,7 @@ void TranslationPacks::ensure(const QString &id) {
   }
   const TranslationPack *pack = find(id);
   if (!pack || !*pack->baseUrl) {
-    const QString language = pack ? QString::fromStdString(lyric_language::displayName(pack->source)) : id;
+    const QString language = pack ? QCoreApplication::translate("LyricLanguage", lyric_language::displayName(pack->source).c_str()) : id;
     emit failed(id, tr("%1 can't be translated yet.").arg(language));
     return;
   }
@@ -229,7 +230,7 @@ QVariantList TranslationPacks::list() const {
     const QString id = QLatin1String(pack.id);
     rows.append(QVariantMap{
         {QStringLiteral("code"), id},
-        {QStringLiteral("name"), QString::fromStdString(lyric_language::displayName(pack.source))},
+        {QStringLiteral("name"), QCoreApplication::translate("LyricLanguage", lyric_language::displayName(pack.source).c_str())},
         {QStringLiteral("quality"), QLatin1String(pack.quality)},
         {QStringLiteral("sizeBytes"), packBytes(pack)},
         {QStringLiteral("installed"), installed(id)},

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -173,7 +175,7 @@ fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm:
                 Spacer(Modifier.height(14.dp))
 
                 Text(
-                    text = "Rename This Device",
+                    text = tr("Rename This Device"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -181,7 +183,7 @@ fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm:
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    text = "Set a custom name for this device in Connect and Listening Parties.",
+                    text = tr("Set a custom name for this device in Connect and Listening Parties."),
                     style = MaterialTheme.typography.bodySmall,
                     color = CanopyColors.Muted,
                     textAlign = TextAlign.Center,
@@ -209,7 +211,7 @@ fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm:
                             IconButton(onClick = { nameInput = "" }) {
                                 Icon(
                                     Icons.Rounded.Close,
-                                    contentDescription = "Clear",
+                                    contentDescription = tr("Clear"),
                                     tint = CanopyColors.Muted,
                                 )
                             }
@@ -258,7 +260,7 @@ fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm:
                                 .glassPane(CircleShape, GlassTone.CONTROL)
                                 .border(1.dp, CanopyColors.Rule, CircleShape),
                     ) {
-                        Text("Cancel", fontWeight = FontWeight.SemiBold, color = CanopyColors.Text)
+                        Text(tr("Cancel"), fontWeight = FontWeight.SemiBold, color = CanopyColors.Text)
                     }
 
                     Button(
@@ -274,7 +276,7 @@ fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm:
                             ),
                         modifier = Modifier.weight(1f).height(44.dp),
                     ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(tr("Save"), fontWeight = FontWeight.Bold)
                     }
                 }
             }

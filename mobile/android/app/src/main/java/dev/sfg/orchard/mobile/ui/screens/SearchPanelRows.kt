@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -97,7 +99,7 @@ internal fun ResultRow(item: CatalogItem, subtitle: String, round: Boolean, onCl
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                item.title,
+                tr(item.title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
                 color = SettingsStyle.Title,
                 maxLines = 1,
@@ -105,7 +107,7 @@ internal fun ResultRow(item: CatalogItem, subtitle: String, round: Boolean, onCl
             )
             if (subtitle.isNotBlank()) {
                 Text(
-                    subtitle,
+                    tr(subtitle),
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                     color = SettingsStyle.Description,
                     maxLines = 1,
@@ -144,7 +146,7 @@ internal fun BrowseTiles(onOpen: (String) -> Unit) {
             ) {
                 Icon(entry.icon, null, tint = SettingsStyle.TileIcon, modifier = Modifier.size(22.dp))
                 Text(
-                    entry.label,
+                    tr(entry.label),
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                     color = SettingsStyle.Title,
                     maxLines = 1,
@@ -164,7 +166,7 @@ internal fun HistoryRow(value: String, onPick: () -> Unit, onRemove: () -> Unit)
         ) {
             Icon(Icons.Rounded.History, null, tint = SettingsStyle.Chevron, modifier = Modifier.size(18.dp))
             Text(
-                value,
+                tr(value),
                 modifier = Modifier.padding(start = 14.dp),
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
                 color = SettingsStyle.Title,
@@ -188,8 +190,8 @@ internal fun PanelMessage(icon: ImageVector, title: String, subtitle: String) {
         RowIcon(icon)
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = SettingsStyle.Title)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = SettingsStyle.Description)
+            Text(tr(title), style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = SettingsStyle.Title)
+            Text(tr(subtitle), style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = SettingsStyle.Description)
         }
     }
 }

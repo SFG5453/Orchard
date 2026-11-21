@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -134,7 +136,7 @@ fun OrchardDock(
                     ) {
                         Icon(
                             imageVector = (selected ?: destinations.first()).icon,
-                            contentDescription = "Show tabs",
+                            contentDescription = tr("Show tabs"),
                             tint = Color.White,
                         )
                     }
@@ -143,7 +145,7 @@ fun OrchardDock(
             Box { player() }
             Box(Modifier.dockGlass()) {
                 IconButton(onClick = onSearch, modifier = Modifier.fillMaxSize()) {
-                    Icon(Icons.Rounded.Search, contentDescription = "Search", tint = Color.White)
+                    Icon(Icons.Rounded.Search, contentDescription = tr("Search"), tint = Color.White)
                 }
             }
         },
@@ -204,7 +206,7 @@ private fun DockTabs(
                 icon = { Icon(destination.icon, contentDescription = null) },
                 label = {
                     Text(
-                        destination.label,
+                        tr(destination.label),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         maxLines = 1,
                     )

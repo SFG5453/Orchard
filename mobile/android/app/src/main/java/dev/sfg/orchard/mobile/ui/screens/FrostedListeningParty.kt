@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -103,7 +105,7 @@ internal fun FrostedListeningPartyPanel(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "Listening party",
+                        text = tr("Listening party"),
                         style =
                             MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = CanopyColors.Text,
@@ -138,7 +140,7 @@ private fun FrostedInactiveParty(
     val accent = LocalAccent.current
 
     Text(
-        text = "Listen to the same music together.",
+        text = tr("Listen to the same music together."),
         style = MaterialTheme.typography.bodyMedium,
         color = CanopyColors.Muted,
     )
@@ -149,7 +151,7 @@ private fun FrostedInactiveParty(
     TextField(
         value = codeInput,
         onValueChange = { codeInput = cleanRoomCode(it).take(ROOM_CODE_LENGTH) },
-        placeholder = { Text("Room code", color = CanopyColors.Muted) },
+        placeholder = { Text(tr("Room code"), color = CanopyColors.Muted) },
         singleLine = true,
         leadingIcon = {
             Icon(
@@ -163,7 +165,7 @@ private fun FrostedInactiveParty(
                 IconButton(onClick = { codeInput = "" }) {
                     Icon(
                         Icons.Rounded.Close,
-                        contentDescription = "Clear",
+                        contentDescription = tr("Clear"),
                         tint = CanopyColors.Muted,
                     )
                 }
@@ -175,7 +177,7 @@ private fun FrostedInactiveParty(
                         }
                     }
                 ) {
-                    Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = accent)
+                    Icon(Icons.Rounded.ContentPaste, contentDescription = tr("Paste"), tint = accent)
                 }
             }
         },
@@ -204,7 +206,7 @@ private fun FrostedInactiveParty(
                 ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
             modifier = Modifier.weight(1f).height(44.dp),
         ) {
-            Text("Join party", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(tr("Join party"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
 
         OutlinedButton(
@@ -215,7 +217,7 @@ private fun FrostedInactiveParty(
                 Modifier.weight(1f).height(44.dp).border(1.dp, CanopyColors.Rule, CircleShape),
         ) {
             Text(
-                "Start a party",
+                tr("Start a party"),
                 fontWeight = FontWeight.Bold,
                 color = CanopyColors.Text,
                 fontSize = 14.sp,
@@ -240,7 +242,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
         }
 
     Text(
-        text = statusText,
+        text = tr(statusText),
         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
         color = if (party.status == PartyStatus.CONNECTED) accent else CanopyColors.Muted,
     )
@@ -260,7 +262,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "ROOM CODE",
+                    text = tr("ROOM CODE"),
                     style =
                         MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
@@ -290,10 +292,10 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                     // Copy Code Button
                     Surface(
                         onClick = {
-                            copyToClipboard(context, party.code, label = "Orchard Room Code")
+                            copyToClipboard(context, party.code, label = tr("Orchard Room Code"))
                             Toast.makeText(
                                     context,
-                                    "Room code copied to clipboard",
+                                    tr("Room code copied to clipboard"),
                                     Toast.LENGTH_SHORT,
                                 )
                                 .show()
@@ -318,7 +320,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "Copy Code",
+                                text = tr("Copy Code"),
                                 style =
                                     MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold
@@ -366,7 +368,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "Share",
+                                text = tr("Share"),
                                 style =
                                     MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold

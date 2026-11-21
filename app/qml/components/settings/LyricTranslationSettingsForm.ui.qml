@@ -30,7 +30,7 @@ SettingsSection {
     property bool translationEnabled: true
     property bool preferApple: false
     property string targetLanguage: "eng"
-    readonly property var languageValues: provider === "local" ? ["", "eng"] : ["", "eng", "spa", "hin", "kor", "jpn", "fra"]
+    readonly property var languageValues: provider === "local" ? ["", "eng", "auto"] : ["", "eng", "spa", "auto", "hin", "kor", "jpn", "fra"]
     property string quality: "standard"
     property string provider: "local"
     property string modelName: ""
@@ -59,17 +59,17 @@ SettingsSection {
         iconName: "languages"
         title: qsTr("Translate lyrics to")
         description: root.provider === "local"
-            ? qsTr("Local models translate to English on this computer. Choose an API or Orchard Account for other target languages.")
+            ? qsTr("Local models translate to English on this computer. Choose an API or Orchard Account for other target languages. English ↔ Spanish translates Spanish songs into English and English songs into Spanish.")
             : root.provider === "orchard" ? qsTr("Gemma 4. %1 Resets at 00:00 UTC. Cached songs are free.").arg(root.accountQuotaMessage)
             : qsTr("Orchard sends lyric lines to your selected API for translation. Your provider may charge for requests.")
 
         SettingsSelect {
             id: languagePicker
             Layout.fillWidth: false
-            Layout.preferredWidth: 160
-            model: root.provider === "local" ? [qsTr("Off"), qsTr("English")]
-                : [qsTr("Off"), qsTr("English"), qsTr("Spanish"), qsTr("Hindi"), qsTr("Korean"), qsTr("Japanese"), qsTr("French")]
-            currentIndex: !root.translationEnabled ? 0 : root.provider === "local" ? 1 : root.languageValues.indexOf(root.targetLanguage)
+            Layout.preferredWidth: 190
+            model: root.provider === "local" ? [qsTr("Off"), qsTr("English"), qsTr("English ↔ Spanish")]
+                : [qsTr("Off"), qsTr("English"), qsTr("Spanish"), qsTr("English ↔ Spanish"), qsTr("Hindi"), qsTr("Korean"), qsTr("Japanese"), qsTr("French")]
+            currentIndex: !root.translationEnabled ? 0 : Math.max(1, root.languageValues.indexOf(root.targetLanguage))
             Accessible.name: qsTr("Translate lyrics to")
             background: Rectangle {
                 radius: height / 2

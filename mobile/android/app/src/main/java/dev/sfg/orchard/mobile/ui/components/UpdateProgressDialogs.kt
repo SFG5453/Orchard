@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -113,7 +115,7 @@ internal fun UpdateDownloadingDialog(state: UpdateState.Downloading, onDismiss: 
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Downloading update",
+                    tr("Downloading update"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -129,7 +131,7 @@ internal fun UpdateDownloadingDialog(state: UpdateState.Downloading, onDismiss: 
                 Spacer(Modifier.height(12.dp))
 
                 Text(
-                    "The installer will open automatically when finished. You can continue listening to music in the background.",
+                    tr("The installer will open automatically when finished. You can continue listening to music in the background."),
                     style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                     color = CanopyColors.Muted,
                     modifier = Modifier.fillMaxWidth(),
@@ -156,7 +158,7 @@ internal fun UpdateDownloadingDialog(state: UpdateState.Downloading, onDismiss: 
                         .height(44.dp),
                 ) {
                     Text(
-                        "Hide",
+                        tr("Hide"),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = CanopyColors.Muted,
                     )
@@ -202,7 +204,7 @@ internal fun UpdateFailedDialog(state: UpdateState.Failed, onDismiss: () -> Unit
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Update failed",
+                    tr("Update failed"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -282,7 +284,7 @@ internal fun UpdateReadyDialog(state: UpdateState.ReadyToInstall, onDismiss: () 
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Update ready to install",
+                    tr("Update ready to install"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -310,7 +312,7 @@ internal fun UpdateReadyDialog(state: UpdateState.ReadyToInstall, onDismiss: () 
                         .height(46.dp),
                 ) {
                     Text(
-                        "Install now",
+                        tr("Install now"),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     )
                 }

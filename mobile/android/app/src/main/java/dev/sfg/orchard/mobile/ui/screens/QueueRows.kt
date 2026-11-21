@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,7 +69,7 @@ internal fun QueueSectionHeader(title: String, trailing: (@Composable () -> Unit
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            title.uppercase(),
+            tr(title.uppercase()),
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
@@ -136,14 +138,14 @@ internal fun QueueClearButton(onClearUpcoming: () -> Unit) {
 internal fun QueueNotice(title: String, message: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp)) {
         Text(
-            title,
+            tr(title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = Color.White,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            message,
+            tr(message),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.65f),
             textAlign = TextAlign.Center,
@@ -180,7 +182,7 @@ internal fun QueueTrackRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        track.title,
+                        tr(track.title),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = if (isHistory) Color.White.copy(alpha = 0.55f) else Color.White,
                         maxLines = 1,
@@ -194,7 +196,7 @@ internal fun QueueTrackRow(
                     }
                 }
                 Text(
-                    track.artist,
+                    tr(track.artist),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = if (isHistory) 0.4f else 0.65f),
                     maxLines = 1,

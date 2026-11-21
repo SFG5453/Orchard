@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -116,7 +118,7 @@ internal fun LazyListScope.homeQuickPicks(
 ) {
     item(key = "head:quick_picks") {
         Box(Modifier.riseIn(distance = 16f)) {
-            HomeSectionHeader(title = "Quick picks", subtitle = "Start a mix from a song", onSeeAll = onSeeAll)
+            HomeSectionHeader(title = tr("Quick picks"), subtitle = tr("Start a mix from a song"), onSeeAll = onSeeAll)
         }
     }
     item(key = "pager:quick_picks") {
@@ -155,7 +157,7 @@ internal fun OfflineModeBanner(downloadedCount: Int) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Offline Mode",
+                    tr("Offline Mode"),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = CanopyColors.Text,

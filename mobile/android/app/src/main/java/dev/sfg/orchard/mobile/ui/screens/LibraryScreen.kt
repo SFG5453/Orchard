@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -156,61 +158,61 @@ fun LibraryScreen(
                     "playlists",
                     filterCatalogItems(library.savedPlaylists.map { CatalogItem.Collection(it) }, searchQuery),
                     "playlist" to "playlists", 2,
-                    if (searching) ShelfEmpty(Icons.Rounded.LibraryMusic, "No matching playlists", "No playlists matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.LibraryMusic, "No saved playlists", "Save a playlist and it will stay close at hand.", browse),
+                    if (searching) ShelfEmpty(Icons.Rounded.LibraryMusic, tr("No matching playlists"), "No playlists matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.LibraryMusic, tr("No saved playlists"), "Save a playlist and it will stay close at hand.", browse),
                 )
             }
             LibraryFilter.ARTISTS -> shelf(
                 "artists",
                 filterCatalogItems(library.savedArtists.map { CatalogItem.Performer(it) }, searchQuery),
                 "artist" to "artists", 3,
-                if (searching) ShelfEmpty(Icons.Rounded.Person, "No matching artists", "No artists matching \"$searchQuery\"")
-                else ShelfEmpty(Icons.Rounded.Person, "No saved artists", "Follow an artist to build this shelf.", browse),
+                if (searching) ShelfEmpty(Icons.Rounded.Person, tr("No matching artists"), "No artists matching \"$searchQuery\"")
+                else ShelfEmpty(Icons.Rounded.Person, tr("No saved artists"), "Follow an artist to build this shelf.", browse),
             )
             LibraryFilter.ALBUMS -> shelf(
                 "albums",
                 filterCatalogItems(library.savedAlbums.map { CatalogItem.Record(it) }, searchQuery),
                 "album" to "albums", 2,
-                if (searching) ShelfEmpty(Icons.Rounded.Album, "No matching albums", "No albums matching \"$searchQuery\"")
-                else ShelfEmpty(Icons.Rounded.Album, "No saved albums", "Albums you save will be available here.", browse),
+                if (searching) ShelfEmpty(Icons.Rounded.Album, tr("No matching albums"), "No albums matching \"$searchQuery\"")
+                else ShelfEmpty(Icons.Rounded.Album, tr("No saved albums"), "Albums you save will be available here.", browse),
             )
             LibraryFilter.SONGS -> {
                 val values = filterTracks(library.likedTracks, searchQuery)
                 songs(
                     "liked", values, countLabel(values.size, "liked song", "liked songs"), sortable = true,
-                    empty = if (searching) ShelfEmpty(Icons.Rounded.MusicNote, "No matching songs", "No songs matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.MusicNote, "No songs saved", "Save songs to your library to see them here", browse),
+                    empty = if (searching) ShelfEmpty(Icons.Rounded.MusicNote, tr("No matching songs"), "No songs matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.MusicNote, tr("No songs saved"), "Save songs to your library to see them here", browse),
                 )
             }
             LibraryFilter.RECENT -> {
                 val values = filterTracks(library.recentlyPlayed, searchQuery)
                 songs(
                     "recent", values, countLabel(values.size, "song played recently", "songs played recently"), sortable = false,
-                    empty = if (searching) ShelfEmpty(Icons.Rounded.History, "No matching recent tracks", "No recently played tracks matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.History, "Nothing played yet", "Start a song and Orchard will remember it here."),
+                    empty = if (searching) ShelfEmpty(Icons.Rounded.History, tr("No matching recent tracks"), "No recently played tracks matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.History, tr("Nothing played yet"), "Start a song and Orchard will remember it here."),
                 )
             }
             LibraryFilter.LOCAL -> {
                 val playlists = filterCatalogItems(localSnapshot.playlists.map { CatalogItem.Collection(it.toPlaylist()) }, searchQuery)
                 val songs = filterTracks(localSnapshot.songs.map { it.toTrack() }, searchQuery)
                 val albums = filterCatalogItems(localSnapshot.albums().map { CatalogItem.Record(it.toAlbum()) }, searchQuery)
-                item(key = "local:playlists-label") { LibraryLabel("Playlists on this phone") }
+                item(key = "local:playlists-label") { LibraryLabel(tr("Playlists on this phone")) }
                 shelf(
                     "local-playlists", playlists, "playlist" to "playlists", 2,
-                    if (searching) ShelfEmpty(Icons.Rounded.LibraryMusic, "No matching playlists", "No playlists matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.LibraryMusic, "No local playlists", "Tap + and choose New playlist, then add songs from this phone."),
+                    if (searching) ShelfEmpty(Icons.Rounded.LibraryMusic, tr("No matching playlists"), "No playlists matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.LibraryMusic, tr("No local playlists"), "Tap + and choose New playlist, then add songs from this phone."),
                 )
-                item(key = "local:albums-label") { LibraryLabel("Albums on this phone") }
+                item(key = "local:albums-label") { LibraryLabel(tr("Albums on this phone")) }
                 shelf(
                     "local-albums", albums, "album" to "albums", 2,
-                    if (searching) ShelfEmpty(Icons.Rounded.Album, "No matching albums", "No albums matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.Album, "No local albums", "Songs with an album tag are grouped into albums here."),
+                    if (searching) ShelfEmpty(Icons.Rounded.Album, tr("No matching albums"), "No albums matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.Album, tr("No local albums"), "Songs with an album tag are grouped into albums here."),
                 )
-                item(key = "local:songs-label") { LibraryLabel("Songs on this phone") }
+                item(key = "local:songs-label") { LibraryLabel(tr("Songs on this phone")) }
                 songs(
                     "local-songs", songs, countLabel(songs.size, "song", "songs"), sortable = true, local = true,
-                    empty = if (searching) ShelfEmpty(Icons.Rounded.MusicNote, "No matching songs", "No songs matching \"$searchQuery\"")
-                    else ShelfEmpty(Icons.Rounded.MusicNote, "No local songs", "Tap + and choose Add songs or Add a folder."),
+                    empty = if (searching) ShelfEmpty(Icons.Rounded.MusicNote, tr("No matching songs"), "No songs matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.MusicNote, tr("No local songs"), "Tap + and choose Add songs or Add a folder."),
                 )
             }
             LibraryFilter.DOWNLOADS -> {

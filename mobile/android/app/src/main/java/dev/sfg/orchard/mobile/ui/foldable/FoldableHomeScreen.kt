@@ -20,6 +20,8 @@
 
 package dev.sfg.orchard.mobile.ui.foldable
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -95,7 +97,7 @@ fun FoldableHomeScreen(data: HomeData) {
             }
 
             if (data.state is LoadState.Loading) {
-                item { HomeSectionShimmer(title = "Loading...") }
+                item { HomeSectionShimmer(title = tr("Loading...")) }
             }
 
             data.layout.forEach { config ->
@@ -106,7 +108,7 @@ fun FoldableHomeScreen(data: HomeData) {
                         if (offline) return@forEach
                         val items = data.playlists.filter { it.playlist.trackCount != 0 }
                         if (items.isNotEmpty()) {
-                            foldableRail("Your Playlists", items, data.seeAll("Your Playlists", items), openCatalogItem)
+                            foldableRail(tr("Your Playlists"), items, data.seeAll(tr("Your Playlists"), items), openCatalogItem)
                         }
                     }
 
@@ -114,7 +116,7 @@ fun FoldableHomeScreen(data: HomeData) {
                         if (offline) return@forEach
                         val items = data.artists
                         if (items.isNotEmpty()) {
-                            foldableRail("Keep listening", items, data.seeAll("Keep listening", items), openCatalogItem)
+                            foldableRail(tr("Keep listening"), items, data.seeAll(tr("Keep listening"), items), openCatalogItem)
                         }
                     }
 
@@ -122,7 +124,7 @@ fun FoldableHomeScreen(data: HomeData) {
                         if (offline) return@forEach
                         val items = data.topSongs.map { CatalogItem.Song(it) }
                         if (items.isNotEmpty()) {
-                            foldableSongShelf("Top Songs", items, available, data.seeAll("Top Songs", items), openCatalogItem)
+                            foldableSongShelf("Top Songs", items, available, data.seeAll(tr("Top Songs"), items), openCatalogItem)
                         }
                     }
 
@@ -143,28 +145,28 @@ fun FoldableHomeScreen(data: HomeData) {
                     BuiltInHomeSection.DOWNLOADED_PLAYLISTS -> {
                         val items = data.offlinePlaylists
                         if (items.isNotEmpty()) {
-                            foldableRail("Downloaded Playlists", items, data.seeAll("Downloaded Playlists", items), openCatalogItem)
+                            foldableRail(tr("Downloaded Playlists"), items, data.seeAll(tr("Downloaded Playlists"), items), openCatalogItem)
                         }
                     }
 
                     BuiltInHomeSection.DOWNLOADED_ARTISTS -> {
                         val items = data.offlineArtists
                         if (items.isNotEmpty()) {
-                            foldableRail("Downloaded Artists", items, data.seeAll("Downloaded Artists", items), openCatalogItem)
+                            foldableRail(tr("Downloaded Artists"), items, data.seeAll(tr("Downloaded Artists"), items), openCatalogItem)
                         }
                     }
 
                     BuiltInHomeSection.DOWNLOADED_ALBUMS -> {
                         val items = data.offlineAlbums
                         if (items.isNotEmpty()) {
-                            foldableRail("Downloaded Albums", items, data.seeAll("Downloaded Albums", items), openCatalogItem)
+                            foldableRail(tr("Downloaded Albums"), items, data.seeAll(tr("Downloaded Albums"), items), openCatalogItem)
                         }
                     }
 
                     BuiltInHomeSection.DOWNLOADED_SONGS -> {
                         if (data.downloadedTracks.isNotEmpty()) {
                             val items = data.downloadedTracks.map { CatalogItem.Song(it) }
-                            foldableSongShelf("Downloaded Songs", items, available, data.seeAll("Downloaded Songs", items), openCatalogItem)
+                            foldableSongShelf("Downloaded Songs", items, available, data.seeAll(tr("Downloaded Songs"), items), openCatalogItem)
                         }
                     }
                 }

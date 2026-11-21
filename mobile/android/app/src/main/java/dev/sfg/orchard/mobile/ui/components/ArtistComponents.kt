@@ -26,6 +26,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -137,7 +139,7 @@ fun ArtistName(
         )
     } else {
         Text(
-            text = name,
+            text = tr(name),
             style = textStyle,
             color = Color.White,
             textAlign = textAlign,
@@ -167,7 +169,7 @@ private fun ArtistPlayRow(
         ArtistRoundButton(
             onClick = onShuffle,
             icon = Icons.Rounded.Shuffle,
-            contentDescription = "Shuffle",
+            contentDescription = tr("Shuffle"),
             enabled = shuffleEnabled,
             modifier = Modifier.riseIn(2, fromScale = 0.6f),
         )
@@ -184,7 +186,7 @@ private fun ArtistPlayRow(
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = playTint, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "Play",
+                    text = tr("Play"),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = playTint,
                 )
@@ -234,6 +236,6 @@ private fun ArtistRoundButton(
 @Composable
 fun DetailBackButton(onBack: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(onClick = onBack, modifier = modifier.padding(start = 8.dp, top = 8.dp)) {
-        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = CanopyColors.Text)
+        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"), tint = CanopyColors.Text)
     }
 }

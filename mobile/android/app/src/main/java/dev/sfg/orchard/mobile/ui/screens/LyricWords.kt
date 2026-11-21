@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.*
@@ -84,7 +86,7 @@ private fun SmoothTimedWord(
     val unsung = if (lineActive) Color.White.copy(alpha = if (adlib) ADLIB_UNSUNG_ALPHA else UNSUNG_ALPHA) else Color.White
     val fill = if (adlib) sung else lerp(Color.White, accent, 0.4f)
     Text(
-        text = word.text.trim(),
+        text = tr(word.text.trim()),
         style = lyricTextStyle(adlib),
         color = unsung,
         onTextLayout = { layout = it },

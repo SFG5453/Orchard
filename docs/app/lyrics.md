@@ -76,6 +76,8 @@ The lyrics view shows "Play something to see its lyrics" when no song is loaded.
 
 In Settings > Downloads > Lyric translation, choose a language from **Translate lyrics to**. API providers and Orchard Account offer English, Spanish, Hindi, Korean, Japanese, and French. Local models translate to English. Choose **Off** to disable translation. On Android, open Settings > Appearance > Lyrics for the same choices.
 
+Choose **English ↔ Spanish** to translate in both directions: songs in Spanish are translated into English, and songs in English or any other language are translated into Spanish. The tooltip on the translate button shows which language the current song goes to. Local models only translate into English, so translating into Spanish needs an API or Orchard Account.
+
 The translate button at the top right of the lyrics view turns translation on or off with your saved language. Translated lines appear above the original lyrics, which stay in smaller text, and the word-by-word highlight keeps following the original words. Orchard checks for lines already in the target language and keeps them as written.
 
 **Local** is the default translation source. It runs on your computer. Lyrics are never sent anywhere, including lyrics for local files.

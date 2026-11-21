@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -241,7 +243,7 @@ private fun HubDetailContent(
                 DetailBackButton(onBack)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = detail.title,
+                    text = tr(detail.title),
                     style = MaterialTheme.typography.displaySmall.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp,
@@ -251,7 +253,7 @@ private fun HubDetailContent(
                 if (detail.description.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = detail.description,
+                        text = tr(detail.description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = CanopyColors.Muted,
                     )
@@ -328,12 +330,12 @@ private fun HubDetailContent(
             val canViewAll = detail.related.size > 3
             item {
                 OrchardSectionHeader(
-                    title = "Explore",
+                    title = tr("Explore"),
                     action = if (canViewAll) "View all" else null,
                     onAction = if (canViewAll) {
                         {
                             activeSectionSheet = SectionSheetState(
-                                title = "Explore",
+                                title = tr("Explore"),
                                 initialItems = detail.related,
                             )
                         }

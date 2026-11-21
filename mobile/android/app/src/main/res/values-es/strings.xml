@@ -1,0 +1,17 @@
+<resources>
+  <string name="play">Reproducir</string>
+  <string name="pause">Pausar</string>
+  <string name="previous">Anterior</string>
+  <string name="next">Siguiente</string>
+  <string name="recent">Recientes</string>
+  <string name="widget_now_playing">ORCHARD  ·  SONANDO AHORA</string>
+  <string name="widget_ready">ORCHARD  ·  LISTO</string>
+  <string name="widget_nothing_playing">No suena nada</string>
+  <string name="widget_open_orchard">Toca para abrir Orchard</string>
+  <string name="widget_jump_back_in">Vuelve a escuchar</string>
+  <string name="widget_latest_rotation">Lo último que has escuchado</string>
+  <string name="widget_recent_empty">Reproduce algo en Orchard y aparecerá aquí.</string>
+  <string name="widget_play_track">Reproducir %1$s de %2$s</string>
+  <string name="widget_player_description">Controles de reproducción teñidos con la portada que se adaptan de compacto a expandido.</string>
+  <string name="widget_recent_description">Reproduce rápido tus cuatro pistas más recientes.</string>
+</resources>

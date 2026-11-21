@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.support
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Intent
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
@@ -96,7 +98,7 @@ internal fun SupportTimeline(state: SupportState) {
         item {
             Column(Modifier.padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    report.title,
+                    tr(report.title),
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp, fontWeight = FontWeight.SemiBold),
                     color = SettingsStyle.Title,
                 )
@@ -117,10 +119,10 @@ internal fun SupportTimeline(state: SupportState) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, tint = SettingsStyle.SageSoft, modifier = Modifier.size(16.dp))
-                    Text("Open on GitHub", color = SettingsStyle.Title, fontSize = 13.sp)
+                    Text(tr("Open on GitHub"), color = SettingsStyle.Title, fontSize = 13.sp)
                 }
                 Text(
-                    "Reply on GitHub. Orchard checks for news every few minutes and tells you when something happens.",
+                    tr("Reply on GitHub. Orchard checks for news every few minutes and tells you when something happens."),
                     color = SettingsStyle.Caption,
                     fontSize = 12.sp,
                 )
@@ -131,7 +133,7 @@ internal fun SupportTimeline(state: SupportState) {
                 Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     if (state.activeLoading) CircularProgressIndicator(color = SettingsStyle.Sage, modifier = Modifier.size(28.dp))
                     else Text(
-                        "No activity yet. Replies, commits that mention this report, and its closing show up here.",
+                        tr("No activity yet. Replies, commits that mention this report, and its closing show up here."),
                         color = SettingsStyle.Description,
                         fontSize = 13.sp,
                     )
@@ -157,7 +159,7 @@ private fun EventRow(event: SupportEvent, onClick: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    event.title,
+                    tr(event.title),
                     color = SettingsStyle.Title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -167,7 +169,7 @@ private fun EventRow(event: SupportEvent, onClick: () -> Unit) {
                 )
                 if (event.maintainer) {
                     Text(
-                        "Maintainer",
+                        tr("Maintainer"),
                         color = SettingsStyle.SageSoft,
                         fontSize = 10.sp,
                         modifier = Modifier

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.connect.ConnectWire
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -73,7 +75,7 @@ internal class Transport(
 
     fun toggleMusicVideo() {
         if (targets.value.selected !is PlaybackTarget.LocalPhone) {
-            showWarning("Music videos play on this device only.")
+            showWarning(tr("Music videos play on this device only."))
             return
         }
         val state = musicVideo.value
@@ -83,7 +85,7 @@ internal class Transport(
             state.playing -> local.setVideoMode(null)
             state.videoId.isNotBlank() -> local.setVideoMode(state.videoId, videoMaxHeight())
             state.checking -> Unit
-            else -> showWarning("No music video is available for this track.")
+            else -> showWarning(tr("No music video is available for this track."))
         }
     }
 

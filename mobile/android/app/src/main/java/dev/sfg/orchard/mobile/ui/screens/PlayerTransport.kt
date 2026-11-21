@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -121,7 +123,7 @@ fun PlayerTransportControls(
         ) {
             TransportPill(
                 icon = Icons.Rounded.SkipPrevious,
-                description = "Previous track",
+                description = tr("Previous track"),
                 enabled = localControls,
                 interactionSource = previousSource,
                 onClick = onPrevious,
@@ -137,7 +139,7 @@ fun PlayerTransportControls(
             )
             TransportPill(
                 icon = Icons.Rounded.SkipNext,
-                description = "Next track",
+                description = tr("Next track"),
                 enabled = localControls,
                 interactionSource = nextSource,
                 onClick = onNext,

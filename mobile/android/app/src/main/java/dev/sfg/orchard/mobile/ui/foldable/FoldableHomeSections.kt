@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.foldable
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -138,7 +140,7 @@ private fun FoldableSongRow(song: CatalogItem.Song, separator: Boolean, onClick:
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        song.title,
+                        tr(song.title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = CanopyColors.Text,
@@ -149,7 +151,7 @@ private fun FoldableSongRow(song: CatalogItem.Song, separator: Boolean, onClick:
                     if (song.explicit) ExplicitBadge()
                 }
                 Text(
-                    song.track.artist,
+                    tr(song.track.artist),
                     style = MaterialTheme.typography.bodySmall,
                     color = CanopyColors.Muted,
                     maxLines = 1,
@@ -170,12 +172,12 @@ internal fun FoldableSectionHeader(title: String, onSeeAll: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CanopyColors.Text)
+        Text(tr(title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CanopyColors.Text)
         Row(
             modifier = Modifier.clip(CircleShape).clickable(onClick = onSeeAll).padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("See all", style = MaterialTheme.typography.labelLarge, color = CanopyColors.Muted)
+            Text(tr("See all"), style = MaterialTheme.typography.labelLarge, color = CanopyColors.Muted)
             Spacer(Modifier.width(4.dp))
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = CanopyColors.Muted, modifier = Modifier.size(16.dp))
         }
@@ -203,7 +205,7 @@ internal fun FoldableOfflineBanner(downloadedCount: Int) {
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Offline Mode",
+                    tr("Offline Mode"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = CanopyColors.Text,

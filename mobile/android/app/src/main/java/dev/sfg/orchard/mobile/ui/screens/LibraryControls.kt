@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +89,7 @@ internal fun LibraryToolbar(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            count,
+            tr(count),
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -107,18 +109,18 @@ private fun SortButton(sort: LibrarySort, onSort: (LibrarySort) -> Unit) {
             Modifier
                 .height(36.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(role = Role.Button, onClickLabel = "Change sort order") { open = true }
+                .clickable(role = Role.Button, onClickLabel = tr("Change sort order")) { open = true }
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Icons.AutoMirrored.Rounded.Sort, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
-            Text(sort.label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+            Text(tr(sort.label), style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             LibrarySort.entries.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option.label) },
+                    text = { Text(tr(option.label)) },
                     trailingIcon = { if (option == sort) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
                     onClick = { open = false; onSort(option) },
                 )
@@ -171,7 +173,7 @@ private fun PillButton(label: String, icon: ImageVector, filled: Boolean, onClic
     val content: @Composable () -> Unit = {
         Icon(icon, null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label)
+        Text(tr(label))
     }
     if (filled) Button(onClick = onClick, modifier = modifier.height(48.dp)) { content() }
     else OutlinedButton(onClick = onClick, modifier = modifier.height(48.dp)) { content() }
@@ -218,8 +220,8 @@ private fun ShortcutTile(
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(tr(title), style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(tr(subtitle), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

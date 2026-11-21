@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.*
 import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -57,10 +59,10 @@ fun SettingsHomeLayout(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Home Screen Layout") },
+                title = { Text(tr("Home Screen Layout")) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -88,7 +90,7 @@ fun SettingsHomeLayout(
                     Tab(
                         selected = selectedTabIndex == index,
                         onClick = { selectedTabIndex = index },
-                        text = { Text(title, fontWeight = FontWeight.SemiBold) },
+                        text = { Text(tr(title), fontWeight = FontWeight.SemiBold) },
                         selectedContentColor = LocalAccent.current,
                         unselectedContentColor = CanopyColors.Muted
                     )
@@ -103,7 +105,7 @@ fun SettingsHomeLayout(
             ) {
                 item {
                     Text(
-                        "Reorder and toggle sections for the Home screen.",
+                        tr("Reorder and toggle sections for the Home screen."),
                         color = CanopyColors.Muted,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -167,17 +169,17 @@ private fun SectionItemRow(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = tr(title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = CanopyColors.Text
                 )
             }
             IconButton(onClick = onMoveUp, enabled = !isFirst) {
-                Icon(Icons.Rounded.ArrowUpward, contentDescription = "Move Up", tint = if (isFirst) CanopyColors.Muted else CanopyColors.Text)
+                Icon(Icons.Rounded.ArrowUpward, contentDescription = tr("Move Up"), tint = if (isFirst) CanopyColors.Muted else CanopyColors.Text)
             }
             IconButton(onClick = onMoveDown, enabled = !isLast) {
-                Icon(Icons.Rounded.ArrowDownward, contentDescription = "Move Down", tint = if (isLast) CanopyColors.Muted else CanopyColors.Text)
+                Icon(Icons.Rounded.ArrowDownward, contentDescription = tr("Move Down"), tint = if (isLast) CanopyColors.Muted else CanopyColors.Text)
             }
             SettingsSwitch(
                 checked = config.enabled,

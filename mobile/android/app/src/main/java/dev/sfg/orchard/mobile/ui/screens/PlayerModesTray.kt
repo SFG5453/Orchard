@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -83,7 +85,7 @@ internal fun PlayerModesTray(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ModeTile(
                 icon = Icons.Rounded.Shuffle,
-                label = "Shuffle",
+                label = tr("Shuffle"),
                 active = shuffle,
                 enabled = canControl,
                 onClick = onShuffle,
@@ -103,7 +105,7 @@ internal fun PlayerModesTray(
             )
             ModeTile(
                 icon = Icons.Rounded.Bedtime,
-                label = "Sleep",
+                label = tr("Sleep"),
                 active = sleepTimerActive,
                 enabled = true,
                 onClick = onSleepTimer,
@@ -112,7 +114,7 @@ internal fun PlayerModesTray(
             if (onAutoplayEnabled != null) {
                 ModeTile(
                     icon = Icons.Rounded.AllInclusive,
-                    label = "Autoplay",
+                    label = tr("Autoplay"),
                     active = autoplayEnabled,
                     enabled = true,
                     onClick = { onAutoplayEnabled(!autoplayEnabled) },
@@ -149,7 +151,7 @@ private fun ModeTile(
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(6.dp))
         Text(
-            text = label,
+            text = tr(label),
             color = tint,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,

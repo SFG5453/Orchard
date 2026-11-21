@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -79,7 +81,7 @@ internal fun CacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSetting
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.Inventory2)
             Column(Modifier.weight(1f)) {
-                RowTitle("Cached audio")
+                RowTitle(tr("Cached audio"))
                 RowSubtitle("Keep up to ${formatCacheSize(steps[index])} of played tracks for instant replay")
             }
             Text(
@@ -111,7 +113,7 @@ internal fun CacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                 )
             }
             Text(
-                "A new limit applies next time playback starts",
+                tr("A new limit applies next time playback starts"),
                 color = SettingsStyle.Caption,
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.padding(top = 4.dp),
@@ -129,8 +131,8 @@ internal fun ArtworkCacheSizeRow(settings: OrchardSettings, onSettings: (Orchard
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.Inventory2)
             Column(Modifier.weight(1f)) {
-                RowTitle("Animated artwork")
-                RowSubtitle("Older motion covers are removed when the cache fills, including offline covers")
+                RowTitle(tr("Animated artwork"))
+                RowSubtitle(tr("Older motion covers are removed when the cache fills, including offline covers"))
             }
             Text(
                 formatCacheSize(steps[index]),
@@ -171,7 +173,7 @@ internal fun ClearCacheRow(
     val formattedSize = remember(cacheSizeBytes) { CacheManager.formatStorageSize(cacheSizeBytes) }
 
     SettingsRow(
-        title = "Clear cache",
+        title = tr("Clear cache"),
         subtitle = "Downloaded songs and your library stay intact ($formattedSize in cache)",
         icon = Icons.Rounded.Delete,
         titleColor = CanopyColors.Danger,
@@ -193,7 +195,7 @@ internal fun ClearCacheRow(
             onDismissRequest = { showConfirmDialog = false },
             title = {
                 Text(
-                    "Clear cache?",
+                    tr("Clear cache?"),
                     color = CanopyColors.Text,
                     fontWeight = FontWeight.Bold,
                 )
@@ -206,7 +208,7 @@ internal fun ClearCacheRow(
                         color = CanopyColors.Text,
                     )
                     Text(
-                        "Downloaded songs and your library will remain intact. Offline motion covers will be removed.",
+                        tr("Downloaded songs and your library will remain intact. Offline motion covers will be removed."),
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -220,7 +222,7 @@ internal fun ClearCacheRow(
                     },
                 ) {
                     Text(
-                        "Clear",
+                        tr("Clear"),
                         color = CanopyColors.Danger,
                         fontWeight = FontWeight.Bold,
                     )
@@ -228,7 +230,7 @@ internal fun ClearCacheRow(
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Cancel", color = CanopyColors.Muted)
+                    Text(tr("Cancel"), color = CanopyColors.Muted)
                 }
             },
             containerColor = CanopyColors.Surface,

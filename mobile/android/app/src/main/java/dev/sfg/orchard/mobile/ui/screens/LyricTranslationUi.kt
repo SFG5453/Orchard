@@ -19,6 +19,9 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
+import dev.sfg.orchard.mobile.i18n.trf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -56,6 +59,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.lyrics.translation.LyricTranslationState
 import dev.sfg.orchard.mobile.lyrics.translation.LyricTranslationState.Status
 import dev.sfg.orchard.mobile.model.LyricLine
+import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
 import dev.sfg.orchard.mobile.model.LyricTranslationProvider
 
 /** Registers [lines] as on screen, which is what lets the translator spend CPU on them. */
@@ -83,7 +87,7 @@ internal fun TranslatedLyricLine(
 ) {
     val align = if (isAlternate) TextAlign.End else TextAlign.Start
     Text(
-        text = translation,
+        text = tr(translation),
         color = Color.White,
         textAlign = align,
         modifier = Modifier.fillMaxWidth(),
@@ -102,7 +106,7 @@ internal fun TranslatedLyricLine(
         )
     } else {
         Text(
-            text = line.text,
+            text = tr(line.text),
             color = Color.White.copy(alpha = 0.72f),
             textAlign = align,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -117,8 +121,8 @@ internal fun LyricTranslateChip(state: LyricTranslationState, modifier: Modifier
     val graph = OrchardGraph.from(LocalContext.current)
     val settings by graph.settings.settings.collectAsStateWithLifecycle()
     val enabled = settings.translateLyrics
-    val target = if (settings.lyricTranslationProvider == LyricTranslationProvider.LOCAL) "English"
-        else settings.lyricTranslationLanguage.label
+    val target = tr(if (settings.lyricTranslationProvider == LyricTranslationProvider.LOCAL &&
+        settings.lyricTranslationLanguage != LyricTranslationLanguage.AUTO) "English" else settings.lyricTranslationLanguage.label)
     val caption = when (state.status) {
         Status.OFF, Status.IDLE -> null
         // Same wording as desktop's LyricsTranslateBar.
@@ -141,7 +145,7 @@ internal fun LyricTranslateChip(state: LyricTranslationState, modifier: Modifier
     ) {
         Icon(
             imageVector = Icons.Rounded.Translate,
-            contentDescription = if (enabled) "Stop translating lyrics" else "Translate lyrics to $target",
+            contentDescription = if (enabled) tr("Stop translating lyrics") else trf("Translate lyrics to %1", target),
             tint = Color.White.copy(alpha = if (enabled) 0.95f else 0.6f),
             modifier = Modifier.size(16.dp),
         )
@@ -151,7 +155,7 @@ internal fun LyricTranslateChip(state: LyricTranslationState, modifier: Modifier
             exit = fadeOut() + shrinkHorizontally(),
         ) {
             Text(
-                text = caption.orEmpty(),
+                text = tr(caption.orEmpty()),
                 color = Color.White.copy(alpha = 0.82f),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
             )

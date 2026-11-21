@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,10 +101,10 @@ fun AppleMusicLoginScreen(onDone: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Sign in to Apple Music") },
+            title = { Text(tr("Sign in to Apple Music")) },
             navigationIcon = {
                 IconButton(onClick = onDone) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -137,12 +139,12 @@ fun AppleMusicLoginScreen(onDone: () -> Unit) {
                 Surface(color = CanopyColors.Surface, modifier = Modifier.fillMaxSize().padding(24.dp)) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Apple Music sign-in failed",
+                            tr("Apple Music sign-in failed"),
                             style = MaterialTheme.typography.titleMedium,
                             color = CanopyColors.Danger,
                         )
-                        Text(error, style = MaterialTheme.typography.bodyMedium, color = CanopyColors.Muted)
-                        TextButton(onClick = { attempt++ }) { Text("Retry") }
+                        Text(tr(error), style = MaterialTheme.typography.bodyMedium, color = CanopyColors.Muted)
+                        TextButton(onClick = { attempt++ }) { Text(tr("Retry")) }
                     }
                 }
             }

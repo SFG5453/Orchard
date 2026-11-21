@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.webkit.CookieManager
@@ -95,10 +97,10 @@ fun SpotifyLoginScreen(
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Log in to Spotify") },
+            title = { Text(tr("Log in to Spotify")) },
             navigationIcon = {
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -183,17 +185,17 @@ fun SpotifyLoginScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Failed to load Spotify login",
+                            tr("Failed to load Spotify login"),
                             style = MaterialTheme.typography.titleMedium,
                             color = CanopyColors.Danger,
                         )
                         Text(
-                            pageError,
+                            tr(pageError),
                             style = MaterialTheme.typography.bodyMedium,
                             color = CanopyColors.Muted,
                         )
                         TextButton(onClick = { webView?.reload() }) {
-                            Text("Retry")
+                            Text(tr("Retry"))
                         }
                     }
                 }

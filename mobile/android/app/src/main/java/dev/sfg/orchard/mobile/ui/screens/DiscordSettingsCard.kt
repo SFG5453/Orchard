@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,17 +65,17 @@ fun DiscordSettingsCard(
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             when (discordStatus) {
                 DiscordPresenceStatus.Unavailable -> Text(
-                    "Install and sign in to the Discord app to share what you’re listening to.",
+                    tr("Install and sign in to the Discord app to share what you’re listening to."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = CanopyColors.Muted,
                 )
                 is DiscordPresenceStatus.Error -> Text(
-                    discordStatus.message,
+                    tr(discordStatus.message),
                     style = MaterialTheme.typography.bodySmall,
                     color = CanopyColors.Danger,
                 )
                 else -> Text(
-                    "Uses the Discord app on this device.",
+                    tr("Uses the Discord app on this device."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = CanopyColors.Muted,
                 )
@@ -90,8 +92,8 @@ fun DiscordSettingsCard(
 
             DiscordToggleRow(
                 icon = Icons.Rounded.Podcasts,
-                title = "Share presence",
-                subtitle = "Display currently playing track on Discord",
+                title = tr("Share presence"),
+                subtitle = tr("Display currently playing track on Discord"),
                 checked = settings.discordPresenceEnabled,
                 onChecked = { onSettings(settings.copy(discordPresenceEnabled = it)) },
             )
@@ -129,12 +131,12 @@ private fun DiscordToggleRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                title,
+                tr(title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = if (enabled) CanopyColors.Text else CanopyColors.Muted,
             )
             Text(
-                subtitle,
+                tr(subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
             )

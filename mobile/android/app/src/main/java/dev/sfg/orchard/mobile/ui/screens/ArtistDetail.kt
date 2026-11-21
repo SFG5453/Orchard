@@ -26,6 +26,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -164,7 +166,7 @@ internal fun ArtistDetailContent(
         }
         val sections = detail.sections.map { it.title to it }.ifEmpty {
             if (detail.related.isEmpty()) emptyList()
-            else listOf("Fans also like" to CatalogSection(id = "related", title = "Fans also like", items = detail.related))
+            else listOf("Fans also like" to CatalogSection(id = "related", title = tr("Fans also like"), items = detail.related))
         }
         // The bio reads best after the music, but ahead of the similar-artists rail that closes the page.
         val similarLast = sections.lastOrNull()?.second?.items?.all { it is CatalogItem.Performer } == true
@@ -270,7 +272,7 @@ internal fun ArtistDetailContent(
 @Composable
 private fun ArtistAboutCard(detail: BrowseDetail, palette: ArtworkPalette, onOpen: (String) -> Unit) {
     HeroAbout(
-        title = "About",
+        title = tr("About"),
         text = detail.description,
         collapsedLines = 4,
         html = detail.hasRichDescription(),

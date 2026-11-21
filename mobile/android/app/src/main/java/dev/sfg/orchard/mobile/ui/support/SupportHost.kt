@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.support
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -204,14 +206,14 @@ private fun UpdateBanner(message: String, onOpen: () -> Unit, onDismiss: () -> U
     ) {
         Icon(Icons.Rounded.BugReport, contentDescription = null, tint = Color(0xFFC4E0CB), modifier = Modifier.size(20.dp))
         Text(
-            message,
+            tr(message),
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
             color = Color(0xFFF0EEE7),
             maxLines = 2,
             modifier = Modifier.weight(1f),
         )
         Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = onDismiss), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Close, contentDescription = "Dismiss", tint = Color(0xFFA3ADA5), modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Close, contentDescription = tr("Dismiss"), tint = Color(0xFFA3ADA5), modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -241,19 +243,19 @@ private fun CaptureBubble(onCapture: () -> Unit, onCancel: () -> Unit) {
                 Modifier
                     .clip(CircleShape)
                     .background(Color(0xFFA6D4BF))
-                    .clickable(role = Role.Button, onClickLabel = "Capture this screen", onClick = onCapture)
+                    .clickable(role = Role.Button, onClickLabel = tr("Capture this screen"), onClick = onCapture)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Rounded.PhotoCamera, contentDescription = null, tint = Color(0xFF0D120F), modifier = Modifier.size(18.dp))
-                Text("Capture", color = Color(0xFF0D120F), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(tr("Capture"), color = Color(0xFF0D120F), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
             Box(
                 Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onCancel),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Back to the report", tint = Color(0xFFD6D9D3), modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Close, contentDescription = tr("Back to the report"), tint = Color(0xFFD6D9D3), modifier = Modifier.size(20.dp))
             }
         }
     }

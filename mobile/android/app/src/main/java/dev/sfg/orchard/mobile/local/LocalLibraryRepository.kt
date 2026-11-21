@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.local
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Context
 import android.net.Uri
 import dev.sfg.orchard.mobile.model.BrowseDetail
@@ -123,7 +125,7 @@ class LocalLibraryRepository(
         background {
             val uris = importer.listTree(tree)
             if (uris.isEmpty()) {
-                notify("No audio files found in that folder.")
+                notify(tr("No audio files found in that folder."))
                 return@background
             }
             commitImport(importer.importUris(uris, mutableLibrary.value.songsById.keys), playlistId)
@@ -210,7 +212,7 @@ class LocalLibraryRepository(
     fun setPlaylistCover(id: String, uri: Uri) = background {
         val picture = importer.ingestPicture(uri, "pl-${id.removePrefix(LOCAL_PLAYLIST_PREFIX)}")
         if (picture == null) {
-            notify("Pick a PNG, JPEG, WebP, GIF or MP4 file.")
+            notify(tr("Pick a PNG, JPEG, WebP, GIF or MP4 file."))
             return@background
         }
         mutableLibrary.value.playlists.firstOrNull { it.id == id }?.let { deleteFiles(it.coverPath, it.animatedPath) }
@@ -225,7 +227,7 @@ class LocalLibraryRepository(
     fun setSongCover(songId: String, uri: Uri) = background {
         val picture = importer.ingestPicture(uri, "tr-${songId.removePrefix(LOCAL_TRACK_PREFIX)}")
         if (picture == null) {
-            notify("Pick a PNG, JPEG, WebP, GIF or MP4 file.")
+            notify(tr("Pick a PNG, JPEG, WebP, GIF or MP4 file."))
             return@background
         }
         mutableLibrary.value.songsById[songId]?.takeIf { it.customCover }?.let { deleteFiles(it.coverPath, it.animatedPath) }
@@ -244,11 +246,11 @@ class LocalLibraryRepository(
     fun setSongLyrics(songId: String, uri: Uri) = background {
         val path = importer.ingestLyrics(uri, songId.removePrefix(LOCAL_TRACK_PREFIX))
         if (path == null) {
-            notify("That file does not look like lyrics. Try an .lrc, .srt or .txt file.")
+            notify(tr("That file does not look like lyrics. Try an .lrc, .srt or .txt file."))
             return@background
         }
         updateSong(songId) { it.copy(lyricsPath = path) }
-        notify("Lyrics saved.")
+        notify(tr("Lyrics saved."))
     }
 
     fun clearSongLyrics(songId: String) {
@@ -287,7 +289,7 @@ class LocalLibraryRepository(
         id = playlist.id,
         kind = CatalogKind.PLAYLIST,
         title = playlist.title,
-        subtitle = "Local playlist",
+        subtitle = tr("Local playlist"),
         description = playlist.description,
         artworkUrl = formatLocalFileUri(playlist.artworkPath),
         tracks = playlist.trackIds.mapNotNull { snapshot.songsById[it]?.toTrack() },

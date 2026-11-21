@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -106,7 +108,7 @@ fun parseReleaseNoteSections(markdown: String): List<ReleaseNoteSection> {
             sections.add(ReleaseNoteSection(title = title, items = currentItems.toList()))
             currentItems.clear()
         } else if (title == null && currentItems.isNotEmpty()) {
-            sections.add(ReleaseNoteSection(title = "What's new", items = currentItems.toList()))
+            sections.add(ReleaseNoteSection(title = tr("What's new"), items = currentItems.toList()))
             currentItems.clear()
         }
     }
@@ -202,7 +204,7 @@ fun parseReleaseNoteSections(markdown: String): List<ReleaseNoteSection> {
         val lines = markdown.lines().map { it.trim() }.filter { it.isNotBlank() }
         val fallbackItems = lines.map { cleanListItemText(it) }.filter { it.isNotBlank() }
         if (fallbackItems.isNotEmpty()) {
-            sections.add(ReleaseNoteSection(title = "What's new", items = fallbackItems))
+            sections.add(ReleaseNoteSection(title = tr("What's new"), items = fallbackItems))
         }
     }
 

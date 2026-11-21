@@ -25,6 +25,7 @@
 #include "lyrics/lyrics_controller.h"
 #include "translation/lyric_language.h"
 
+#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSettings>
@@ -66,7 +67,7 @@ LyricsTranslator::LyricsTranslator(LyricsController *lyrics, QObject *parent)
   if (QSettings().value(kQualityKey).toString() == QStringLiteral("high"))
     m_quality = QStringLiteral("high");
   const QString target = QSettings().value(QStringLiteral("lyrics/translationTarget"), QStringLiteral("eng")).toString();
-  if (lyric_language::supportedTarget(target.toStdString())) m_targetLanguage = target;
+  if (target == QStringLiteral("auto") || lyric_language::supportedTarget(target.toStdString())) m_targetLanguage = target;
   const QString savedProvider = QSettings().value(kProviderKey).toString();
   if (QStringList{QStringLiteral("orchard"), QStringLiteral("openai"), QStringLiteral("claude"), QStringLiteral("gemini"), QStringLiteral("custom")}.contains(savedProvider))
     m_provider = savedProvider;
@@ -120,7 +121,8 @@ void LyricsTranslator::setEnabled(bool enabled) {
 }
 
 void LyricsTranslator::setTargetLanguage(const QString &language) {
-  if (!lyric_language::supportedTarget(language.toStdString()) || m_targetLanguage == language) return;
+  const bool known = language == QStringLiteral("auto") || lyric_language::supportedTarget(language.toStdString());
+  if (!known || m_targetLanguage == language) return;
   m_targetLanguage = language;
   QSettings().setValue(QStringLiteral("lyrics/translationTarget"), language);
   emit targetLanguageChanged();
@@ -266,7 +268,11 @@ void LyricsTranslator::removeApiKey() {
 }
 
 QString LyricsTranslator::sourceName() const {
-  return QString::fromStdString(lyric_language::displayName(m_source.toStdString()));
+  return QCoreApplication::translate("LyricLanguage", lyric_language::displayName(m_source.toStdString()).c_str());
+}
+
+QString LyricsTranslator::activeTargetName() const {
+  return QCoreApplication::translate("LyricLanguage", lyric_language::displayName(m_activeTarget.toStdString()).c_str());
 }
 
 QVariantList LyricsTranslator::packs() const { return m_packs->list(); }
@@ -336,6 +342,14 @@ void LyricsTranslator::start() {
   m_pending.clear();
   m_progress = 0;
   m_lines = QStringList(m_texts.size(), QString());
+  m_activeTarget = m_targetLanguage;
+  if (m_activeTarget == QStringLiteral("auto")) {
+    std::vector<std::string> utf8;
+    for (const QString &text : std::as_const(m_texts))
+      utf8.push_back(text.toStdString());
+    m_activeTarget = QString::fromStdString(lyric_language::autoTarget(utf8));
+  }
+  emit activeTargetChanged();
   if (tryApple())
     return;
   startProvider();
@@ -347,10 +361,14 @@ void LyricsTranslator::startProvider() {
   for (const QString &text : std::as_const(m_texts))
     utf8.push_back(text.toStdString());
   const lyric_language::SongPlan plan = m_provider == QStringLiteral("local") ? lyric_language::plan(utf8)
-      : lyric_language::remotePlan(utf8, m_targetLanguage.toStdString());
+      : lyric_language::remotePlan(utf8, m_activeTarget.toStdString());
   m_source = QString::fromStdString(plan.source);
   m_pack.clear();
   if (m_source.isEmpty() && m_provider == QStringLiteral("local")) {
+    if (m_activeTarget == QStringLiteral("spa")) {
+      setStatus(QStringLiteral("unsupported"), tr("Translating into Spanish needs Orchard Account or an API."));
+      return;
+    }
     setStatus(QStringLiteral("idle"));
     return;
   }

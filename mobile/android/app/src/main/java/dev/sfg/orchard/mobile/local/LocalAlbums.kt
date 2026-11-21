@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.local
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
@@ -96,7 +98,7 @@ fun LocalAlbum.toDetail(): BrowseDetail = BrowseDetail(
     id = id,
     kind = CatalogKind.ALBUM,
     title = title,
-    subtitle = "Album on this phone",
+    subtitle = tr("Album on this phone"),
     artworkUrl = formatLocalFileUri(artworkPath),
     tracks = songs.map { it.toTrack() },
     artist = artist,

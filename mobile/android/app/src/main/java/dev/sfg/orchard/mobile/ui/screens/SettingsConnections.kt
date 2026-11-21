@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -70,22 +72,22 @@ internal fun connectionStatuses(
     appleMusicStatus: ConnectionStatus,
 ): Map<ConnectionService, ConnectionStatus> = mapOf(
     ConnectionService.Discord to when {
-        !settings.discordPresenceEnabled -> ConnectionStatus(false, "Presence off")
-        discordStatus is DiscordPresenceStatus.Sharing -> ConnectionStatus(true, "Sharing presence")
-        discordStatus is DiscordPresenceStatus.Ready -> ConnectionStatus(true, "Ready")
+        !settings.discordPresenceEnabled -> ConnectionStatus(false, tr("Presence off"))
+        discordStatus is DiscordPresenceStatus.Sharing -> ConnectionStatus(true, tr("Sharing presence"))
+        discordStatus is DiscordPresenceStatus.Ready -> ConnectionStatus(true, tr("Ready"))
         discordStatus is DiscordPresenceStatus.Error -> ConnectionStatus(false, discordStatus.message)
-        else -> ConnectionStatus(false, "Discord app not installed")
+        else -> ConnectionStatus(false, tr("Discord app not installed"))
     },
     ConnectionService.Lastfm to when (lastfmState) {
-        is LastfmState.Connected -> ConnectionStatus(true, "Scrobbling on")
-        LastfmState.Connecting -> ConnectionStatus(false, "Starting browser authorization…")
-        is LastfmState.Pending -> ConnectionStatus(false, "Approve Orchard in your browser, then finish")
+        is LastfmState.Connected -> ConnectionStatus(true, tr("Scrobbling on"))
+        LastfmState.Connecting -> ConnectionStatus(false, tr("Starting browser authorization…"))
+        is LastfmState.Pending -> ConnectionStatus(false, tr("Approve Orchard in your browser, then finish"))
         is LastfmState.Error -> ConnectionStatus(false, lastfmState.message)
         LastfmState.SignedOut -> ConnectionStatus(false, ConnectionService.Lastfm.blurb)
     },
     ConnectionService.ListenBrainz to when (listenBrainzState) {
         is ListenBrainzState.Connected -> ConnectionStatus(true, "Connected as ${listenBrainzState.user}")
-        ListenBrainzState.Validating -> ConnectionStatus(false, "Checking your token…")
+        ListenBrainzState.Validating -> ConnectionStatus(false, tr("Checking your token…"))
         is ListenBrainzState.Error -> ConnectionStatus(false, listenBrainzState.message)
         ListenBrainzState.SignedOut -> ConnectionStatus(false, ConnectionService.ListenBrainz.blurb)
     },
@@ -115,7 +117,7 @@ internal fun ConnectionsList(
 ) {
     val (connected, available) = ConnectionService.entries.partition { statuses[it]?.connected == true }
     if (connected.isNotEmpty()) {
-        SectionLabel("Connected")
+        SectionLabel(tr("Connected"))
         SettingsPanel(index = 1) {
             connected.forEachIndexed { index, service ->
                 if (index > 0) PanelDivider()
@@ -124,7 +126,7 @@ internal fun ConnectionsList(
         }
     }
     if (available.isNotEmpty()) {
-        SectionLabel("Available", 2)
+        SectionLabel(tr("Available"), 2)
         SettingsPanel(index = 3) {
             available.forEachIndexed { index, service ->
                 if (index > 0) PanelDivider()
@@ -162,7 +164,7 @@ private fun ConnectionRow(
                 border = BorderStroke(1.dp, SettingsStyle.ButtonBorder),
             ) {
                 Text(
-                    "Connect",
+                    tr("Connect"),
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
                     color = SettingsStyle.Title,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),

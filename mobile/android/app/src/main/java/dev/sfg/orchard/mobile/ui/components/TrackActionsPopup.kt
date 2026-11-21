@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,7 +114,7 @@ internal fun TrackActionsPopup(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            track.title,
+                            tr(track.title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = CanopyColors.Text,
                             maxLines = 1,
@@ -126,7 +128,7 @@ internal fun TrackActionsPopup(
                     }
                     if (track.artist.isNotBlank()) {
                         Text(
-                            track.artist,
+                            tr(track.artist),
                             style = MaterialTheme.typography.bodyMedium,
                             color = CanopyColors.Muted,
                             maxLines = 1,
@@ -230,7 +232,7 @@ private fun PopupActionRow(icon: ImageVector, label: String, index: Int, onClick
             Icon(icon, contentDescription = null, tint = LocalAccent.current, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(16.dp))
             Text(
-                label,
+                tr(label),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = CanopyColors.Text,
             )

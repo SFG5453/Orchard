@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -79,7 +81,7 @@ import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 @Composable
 internal fun SectionLabel(value: String, index: Int = 0) {
     Text(
-        value.uppercase(),
+        tr(value.uppercase()),
         style = MaterialTheme.typography.labelMedium.copy(
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
@@ -266,7 +268,7 @@ internal fun <T> SettingsSegmented(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    label,
+                    tr(label),
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                     color = if (isSelected) SettingsStyle.OnAccent else SettingsStyle.SegmentIdle,
                 )
@@ -295,7 +297,7 @@ internal fun SettingsPill(
     ) {
         Box(Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
             Text(
-                label,
+                tr(label),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 color = if (destructive) CanopyColors.Danger else SettingsStyle.Title,
             )
@@ -341,7 +343,7 @@ internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMod
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.SkipNext)
             Column {
-                RowTitle("Non-music parts")
+                RowTitle(tr("Non-music parts"))
                 RowSubtitle(
                     when (value) {
                         NonMusicSkipMode.OFF -> "Songs play through, talking and all"

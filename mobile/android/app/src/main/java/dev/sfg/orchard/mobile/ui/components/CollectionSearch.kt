@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -171,7 +173,7 @@ fun CollectionTopSearchBar(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Exit search",
+                    contentDescription = tr("Exit search"),
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
                 )
@@ -206,7 +208,7 @@ fun CollectionTopSearchBar(
                 ) {
                     if (query.isEmpty()) {
                         Text(
-                            text = placeholder,
+                            text = tr(placeholder),
                             style = TextStyle(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Normal,
@@ -244,7 +246,7 @@ fun CollectionTopSearchBar(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Rounded.Close,
-                                contentDescription = "Clear search",
+                                contentDescription = tr("Clear search"),
                                 tint = Color.White,
                                 modifier = Modifier.size(14.dp),
                             )

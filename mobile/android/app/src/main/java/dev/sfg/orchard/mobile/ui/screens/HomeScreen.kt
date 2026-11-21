@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -109,7 +111,7 @@ fun HomeScreen(data: HomeData) {
             if (!offline && spotlight.isNotEmpty()) {
                 item {
                     DiscoverCarousel(
-                        title = "Your daily discover",
+                        title = tr("Your daily discover"),
                         entries = spotlight,
                         onPlayAll = { data.play(spotlight.first().item) },
                         onClick = { item ->
@@ -135,7 +137,7 @@ fun HomeScreen(data: HomeData) {
                         if (offline) return@forEach
                         val playlistItems = data.playlists
                         if (playlistItems.isNotEmpty()) {
-                            val openAll = data.seeAll("Your Playlists", playlistItems)
+                            val openAll = data.seeAll(tr("Your Playlists"), playlistItems)
                             homeRail(
                                 "Your Playlists", playlistItems, "pl", openAll,
                                 header = { AccountSectionTitle("Your playlists", data.auth, openAll) },
@@ -148,8 +150,8 @@ fun HomeScreen(data: HomeData) {
                         val artistItems = data.artists
                         if (artistItems.isNotEmpty()) {
                             homeRail(
-                                "Keep listening", artistItems, "art", data.seeAll("Keep listening", artistItems),
-                                subtitle = "Artists you follow and love", spacing = 16.dp, card = artistCard,
+                                "Keep listening", artistItems, "art", data.seeAll(tr("Keep listening"), artistItems),
+                                subtitle = tr("Artists you follow and love"), spacing = 16.dp, card = artistCard,
                             )
                         }
                     }
@@ -159,7 +161,7 @@ fun HomeScreen(data: HomeData) {
                         if (picks.size >= QUICK_PICKS_PER_PAGE) {
                             homeQuickPicks(
                                 picks,
-                                data.seeAll("Quick picks", picks.map { CatalogItem.Song(it) }),
+                                data.seeAll(tr("Quick picks"), picks.map { CatalogItem.Song(it) }),
                                 row = quickPickRow,
                             )
                         }
@@ -193,7 +195,7 @@ fun HomeScreen(data: HomeData) {
                         if (data.offlinePlaylists.isNotEmpty()) {
                             homeRail(
                                 "Downloaded Playlists", data.offlinePlaylists, "off_pl",
-                                data.seeAll("Downloaded Playlists", data.offlinePlaylists), card = collectionCard,
+                                data.seeAll(tr("Downloaded Playlists"), data.offlinePlaylists), card = collectionCard,
                             )
                         }
                     }
@@ -202,7 +204,7 @@ fun HomeScreen(data: HomeData) {
                         if (data.offlineArtists.isNotEmpty()) {
                             homeRail(
                                 "Downloaded Artists", data.offlineArtists, "off_art",
-                                data.seeAll("Downloaded Artists", data.offlineArtists), spacing = 16.dp, card = artistCard,
+                                data.seeAll(tr("Downloaded Artists"), data.offlineArtists), spacing = 16.dp, card = artistCard,
                             )
                         }
                     }
@@ -211,7 +213,7 @@ fun HomeScreen(data: HomeData) {
                         if (data.offlineAlbums.isNotEmpty()) {
                             homeRail(
                                 "Downloaded Albums", data.offlineAlbums, "off_alb",
-                                data.seeAll("Downloaded Albums", data.offlineAlbums),
+                                data.seeAll(tr("Downloaded Albums"), data.offlineAlbums),
                                 card = collectionCard,
                             )
                         }
@@ -221,16 +223,16 @@ fun HomeScreen(data: HomeData) {
                         if (downloadedTracks.isNotEmpty()) {
                             homeTrackSection(
                                 "Downloaded Songs", downloadedTracks, "off_trk",
-                                data.seeAll("Downloaded Songs", downloadedTracks.map { CatalogItem.Song(it) }),
+                                data.seeAll(tr("Downloaded Songs"), downloadedTracks.map { CatalogItem.Song(it) }),
                                 row = rankedRow,
                             )
                         } else {
                             item {
                                 MessagePanel(
-                                    title = "No downloaded music",
+                                    title = tr("No downloaded music"),
                                     message =
-                                        "You are currently offline. Connect to the internet to stream music, or download tracks to listen offline.",
-                                    actionLabel = "Try reconnecting",
+                                        tr("You are currently offline. Connect to the internet to stream music, or download tracks to listen offline."),
+                                    actionLabel = tr("Try reconnecting"),
                                     onAction = actions.refresh,
                                 )
                             }
@@ -245,7 +247,7 @@ fun HomeScreen(data: HomeData) {
                     contentAlignment = Alignment.Center,
                 ) {
                     TextButton(onClick = actions.editLayout) {
-                        Text("Edit home layout", color = CanopyColors.Muted)
+                        Text(tr("Edit home layout"), color = CanopyColors.Muted)
                     }
                 }
             }

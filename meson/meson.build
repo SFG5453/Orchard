@@ -280,6 +280,8 @@ app_sources = [
   'app/src/system_tray.cpp',
   'app/src/startup_settings.cpp',
   'app/src/startup_settings.h',
+  'app/src/i18n/ui_language.cpp',
+  'app/src/i18n/ui_language.h',
   'app/src/system_tray.h',
   'app/src/update/bootstrapper_client.cpp',
   'app/src/update/package_release.cpp',
@@ -640,6 +642,7 @@ apple_music_sources = [
 
 
 app_moc_headers = [
+  'app/src/i18n/ui_language.h',
   'app/src/playback/apple_history.h',
   'app/src/api/local_api.h',
   'app/src/lyrics/lyrics_provider_settings.h',

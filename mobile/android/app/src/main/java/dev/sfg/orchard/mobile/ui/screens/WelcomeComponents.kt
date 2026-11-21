@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,13 +60,13 @@ internal fun WelcomeSectionCard(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = title,
+            text = tr(title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = CanopyColors.Text,
             modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
         )
         Text(
-            text = subtitle,
+            text = tr(subtitle),
             style = MaterialTheme.typography.bodySmall,
             color = CanopyColors.Muted,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
@@ -103,12 +105,12 @@ internal fun WelcomeToggleRow(
                 .padding(horizontal = 14.dp),
         ) {
             Text(
-                title,
+                tr(title),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = CanopyColors.Text,
             )
             Text(
-                subtitle,
+                tr(subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
             )
@@ -155,13 +157,13 @@ internal fun WelcomeOptionChip(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            title,
+            tr(title),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = if (selected) LocalAccent.current else CanopyColors.Text,
             textAlign = TextAlign.Center,
         )
         Text(
-            subtitle,
+            tr(subtitle),
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
             color = CanopyColors.Muted,
             textAlign = TextAlign.Center,

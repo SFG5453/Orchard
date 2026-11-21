@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.core.RepeatMode
@@ -235,7 +237,7 @@ internal fun BestMixButton(isSorting: Boolean, statusText: String, onClick: () -
             } else {
                 Icon(
                     Icons.Rounded.AutoAwesome,
-                    contentDescription = "Best mix",
+                    contentDescription = tr("Best mix"),
                     tint = LocalAccent.current,
                     modifier = Modifier
                         .size(18.dp)
@@ -274,13 +276,13 @@ internal fun BestMixDownloadPrompt(
                     modifier = Modifier.size(24.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Best Mix Offline Analysis", fontWeight = FontWeight.Bold)
+                Text(tr("Best Mix Offline Analysis"), fontWeight = FontWeight.Bold)
             }
         },
         text = {
             Column {
                 Text(
-                    "Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly.",
+                    tr("Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.85f),
                 )
@@ -297,12 +299,12 @@ internal fun BestMixDownloadPrompt(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = LocalAccent.current),
             ) {
-                Text("Download & Sort", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(tr("Download & Sort"), color = Color.Black, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                Text(tr("Cancel"), color = Color.White.copy(alpha = 0.7f))
             }
         },
         shape = RoundedCornerShape(20.dp),

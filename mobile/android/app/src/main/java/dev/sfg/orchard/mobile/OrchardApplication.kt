@@ -32,6 +32,7 @@ import okhttp3.Cache
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.launch
 
 /** Application owner for repositories that must outlive individual screens. */
 class OrchardApplication : Application(), SingletonImageLoader.Factory {
@@ -40,7 +41,11 @@ class OrchardApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        dev.sfg.orchard.mobile.i18n.L10n.init(this)
         graph = OrchardGraph(this)
+        kotlinx.coroutines.MainScope().launch {
+            graph.settings.settings.collect { dev.sfg.orchard.mobile.i18n.L10n.language = it.uiLanguage }
+        }
         dev.sfg.orchard.mobile.playback.smart.npu.NpuSupport.init(this)
     }
 

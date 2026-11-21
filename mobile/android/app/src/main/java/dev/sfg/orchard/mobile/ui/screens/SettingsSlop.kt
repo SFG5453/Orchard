@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,8 +43,8 @@ internal fun SlopSettingsRow(settings: OrchardSettings, onSettings: (OrchardSett
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.AutoAwesome)
             Column {
-                RowTitle("AI-generated music")
-                RowSubtitle("Uses the \"Made with AI\" label YouTube shows on the playing song and the next three.")
+                RowTitle(tr("AI-generated music"))
+                RowSubtitle(tr("Uses the \"Made with AI\" label YouTube shows on the playing song and the next three."))
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -62,8 +64,8 @@ internal fun SlopSettingsRow(settings: OrchardSettings, onSettings: (OrchardSett
     }
     PanelDivider()
     ToggleRow(
-        title = "Audio AI analysis (deprecated)",
-        subtitle = "Also download songs and analyse the audio for AI-generation artifacts. This detector misses newer AI music.",
+        title = tr("Audio AI analysis (deprecated)"),
+        subtitle = tr("Also download songs and analyse the audio for AI-generation artifacts. This detector misses newer AI music."),
         icon = Icons.Rounded.GraphicEq,
         checked = settings.slopAudioScan,
         enabled = settings.slopAction != SlopAction.OFF,
