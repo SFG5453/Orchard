@@ -22,6 +22,7 @@ import QtQuick
 import QtQuick.Controls
 
 // Height cap, FSR 1 upscaling and its sharpening for the music video picture.
+// Native macOS pictures never reach Qt's renderer, so they only get the height cap.
 Menu {
     id: root
 
@@ -112,6 +113,8 @@ Menu {
     }
 
     MenuSeparator {
+        visible: !OrchardMusicVideo.nativePicture
+        height: visible ? implicitHeight : 0
         contentItem: Rectangle {
             implicitHeight: 1
             color: "#1fffffff"
@@ -120,13 +123,16 @@ Menu {
 
     QualityItem {
         text: qsTr("FSR 1 upscaling")
+        visible: !OrchardMusicVideo.nativePicture
+        height: visible ? implicitHeight : 0
         checked: OrchardMusicVideo.upscaling
         onTriggered: OrchardMusicVideo.upscaling = checked
     }
 
     Item {
         width: 236
-        height: 44
+        height: visible ? 44 : 0
+        visible: !OrchardMusicVideo.nativePicture
         enabled: OrchardMusicVideo.upscaling
         opacity: enabled ? 1 : 0.45
 

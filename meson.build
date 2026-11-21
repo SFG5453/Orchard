@@ -4,6 +4,18 @@ project('Orchard', ['c', 'cpp'], version: '2.0.11-canary.1', meson_version: '>=1
 cmake = import('cmake')
 qt6 = import('qt6')
 
+# Qt 6.12's frameworks target macOS 14.4. Without a pin, clang targets the build machine's macOS.
+macos_min = '14.4'
+macos_env = {}
+if host_machine.system() == 'darwin'
+  add_languages('objcpp', native: false)
+  foreach language : ['c', 'cpp', 'objcpp']
+    add_global_arguments('-mmacosx-version-min=' + macos_min, language: language)
+    add_global_link_arguments('-mmacosx-version-min=' + macos_min, language: language)
+  endforeach
+  macos_env = {'MACOSX_DEPLOYMENT_TARGET': macos_min}
+endif
+
 # Upstream stays on CMake; Meson imports its checked-out submodule targets.
 quickjs_options = cmake.subproject_options()
 quickjs_options.add_cmake_defines({
@@ -93,7 +105,10 @@ litert_libdir = 'vendor/litert/lib'
 if host_machine.system() == 'windows'
   configure_file(input: litert_libdir / 'windows/libLiteRt.dll', output: 'libLiteRt.dll', copy: true)
 elif host_machine.system() == 'darwin'
-  configure_file(input: litert_libdir / 'macos/libLiteRt.dylib', output: 'libLiteRt.dylib', copy: true)
+  # LiteRT ships only an arm64 macOS runtime; Intel Macs build without local translation.
+  if host_machine.cpu_family() == 'aarch64'
+    configure_file(input: litert_libdir / 'macos/libLiteRt.dylib', output: 'libLiteRt.dylib', copy: true)
+  endif
 elif host_machine.cpu_family() == 'x86_64'
   configure_file(input: litert_libdir / 'linux/libLiteRt.so', output: 'libLiteRt.so', copy: true)
 endif
@@ -117,6 +132,15 @@ else
     modules: ['Core', 'Gui'],
     private_headers: true)
 endif
+# pkg-config adds QT_<MODULE>_LIB, but Meson's qmake lookup on macOS does not. QTEST_MAIN picks
+# its application class from them, and without a GUI application there is no screen.
+if host_machine.system() == 'darwin'
+  qt_module_args = []
+  foreach module : qt_modules
+    qt_module_args += '-DQT_' + module.to_upper() + '_LIB'
+  endforeach
+  qt_dep = declare_dependency(dependencies: qt_dep, compile_args: qt_module_args)
+endif
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
 # DBus (Linux) and IOKit (macOS) back the screen wake lock.
@@ -130,7 +154,8 @@ if host_machine.system() == 'linux'
 elif host_machine.system() == 'windows'
   platform_deps += [cpp.find_library('dbghelp'), cpp.find_library('shell32'), cpp.find_library('dwmapi')]
 elif host_machine.system() == 'darwin'
-  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation'])]
+  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation', 'Foundation', 'AppKit', 'MediaPlayer',
+    'AVFoundation', 'CoreMedia', 'QuartzCore'])]
 endif
 
 python = find_program('python3')
@@ -164,6 +189,7 @@ rust_archive = custom_target('orchard Rust core',
   command: [python, files('scripts/meson-cargo-build.py'),
     '--package', 'orchard-core-ffi', '--target-dir', cargo_target_dir,
     '--target', rust_target, '--profile', rust_profile, '--output', '@OUTPUT@'],
+  env: macos_env,
 )
 rust_platform_deps = []
 if host_machine.system() == 'windows'
@@ -222,6 +248,7 @@ keychain_archive = custom_target('qtkeychain archive',
     '--build-dir', meson.current_build_dir() / 'qtkeychain-cmake',
     '--output', '@OUTPUT@', '--build-type', get_option('buildtype') == 'debug' ? 'Debug' : 'Release',
     '--toolchain', meson.current_build_dir() / 'third_party/quickjs/__CMake_build/CMakeMesonToolchainFile.cmake'],
+  env: macos_env,
   build_always_stale: true)
 keychain_deps = [qt_dep]
 if host_machine.system() == 'linux'
@@ -335,9 +362,9 @@ docs_qrc = qt6.compile_resources(sources: files('meson/app_docs.qrc'), extra_arg
 release_notes_qrc = qt6.compile_resources(sources: files('meson/release_notes.qrc'), extra_args: rcc_args)
 assets_qrc = qt6.compile_resources(sources: files('meson/qml_assets.qrc'), extra_args: rcc_args)
 qml_files_qrc = qt6.compile_resources(sources: files('meson/qml_files.qrc'), extra_args: rcc_args)
-# Sign-in hosts WebView2 on Windows and WebKitGTK on Linux; other platforms use QtWebView.
-auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_linux.qrc'}.get(
-  host_machine.system(), 'meson/auth_qml.qrc')
+# Sign-in hosts WebView2 on Windows, WebKitGTK on Linux and WKWebView on macOS; other platforms use QtWebView.
+auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_webkit.qrc',
+  'darwin': 'meson/auth_qml_webkit.qrc'}.get(host_machine.system(), 'meson/auth_qml.qrc')
 auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_args)
 
 app_inc = include_directories('app/src', 'app/src/auth',
@@ -345,19 +372,35 @@ app_inc = include_directories('app/src', 'app/src/auth',
 app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep, youtube_extractor_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
-if host_machine.system() == 'windows' or host_machine.system() == 'linux'
+macos_distribution = get_option('macos_distribution')
+if host_machine.system() == 'darwin' and macos_distribution
+  app_args += ['-DORCHARD_MACOS_DISTRIBUTION']
+endif
+if host_machine.system() in ['windows', 'linux', 'darwin']
   app_args += ['-DORCHARD_NATIVE_COOKIE_AUTH']
 endif
 if host_machine.system() == 'linux' and xcb_dep.found()
   app_args += ['-DORCHARD_HAVE_XCB']
 endif
+if host_machine.system() == 'darwin'
+  app_moc_headers += ['app/src/playback/apple_music_fairplay.h']
+endif
 app_moc = qt6.compile_moc(headers: app_moc_headers,
   sources: ['app/src/providers/runtime/provider_runtime.cpp'],
   include_directories: app_inc, dependencies: app_dependencies,
   extra_args: app_args)
-app_lib = static_library('orchard_app', files(app_sources) + app_moc,
+app_platform_sources = []
+if host_machine.system() == 'darwin'
+  app_platform_sources += files('app/src/dock_reopen_mac.h', 'app/src/dock_reopen_mac.mm',
+    'app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm',
+    'app/src/mac_menus.h', 'app/src/mac_menus.cpp',
+    'app/src/occlusion_watch_mac.h', 'app/src/occlusion_watch_mac.mm',
+    'app/src/window_chrome_mac.h', 'app/src/window_chrome_mac.mm',
+    'app/src/playback/apple_music_fairplay.h', 'app/src/playback/apple_music_fairplay.mm')
+endif
+app_lib = static_library('orchard_app', files(app_sources) + app_platform_sources + app_moc,
   include_directories: app_inc, dependencies: app_dependencies,
-  cpp_args: app_args, pic: true)
+  cpp_args: app_args, objcpp_args: app_args + ['-std=c++20', '-fobjc-arc'], pic: true)
 app_dep = declare_dependency(link_with: app_lib, include_directories: app_inc,
   dependencies: app_dependencies, compile_args: app_args)
 
@@ -366,6 +409,7 @@ qml_type_headers = [
   'app/src/appearance/artwork_palette.h',
   'app/src/appearance/kawarp_background.h',
   'app/src/appearance/liquid_glass.h',
+  'app/src/appearance/video_hole.h',
 ]
 # Meson's Qt helper puts every source at the module root. Thin wrappers keep
 # each real QML file beside the relative imports it expects.
@@ -396,6 +440,8 @@ qmldir_resources = custom_target('Orchard module manifest', input: qmldir_file,
   command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
     '--name', 'orchard_manifest', '--prefix', '/qt/qml/Orchard',
     '--output', '@OUTPUT@', '@INPUT@'])
+# Qt's macOS moc drops QML_ELEMENT once -I<qt>/include repeats, which every Qt module adds.
+qml_moc_dep = host_machine.system() == 'darwin' ? dependency('qt6', modules: ['Core']) : qt_dep
 qml_module = qt6.qml_module('Orchard', version: '1.0',
   qml_sources: qml_wrappers,
   qml_singletons: qml_singletons,
@@ -404,7 +450,7 @@ qml_module = qt6.qml_module('Orchard', version: '1.0',
   moc_headers: qml_type_headers,
   resources_prefix: 'qt/qml',
   include_directories: app_inc,
-  dependencies: [qt_dep])
+  dependencies: [qml_moc_dep])
 exe_moc = qt6.compile_moc(sources: ['app/src/appearance/liquid_glass.cpp'],
   include_directories: app_inc, dependencies: [qt_dep, qt_gui_private])
 
@@ -427,6 +473,8 @@ endif
 ffmpeg_stage_sources = files(
   'scripts/stage-ffmpeg-windows.py',
   'scripts/build-ffmpeg-windows.sh',
+  'scripts/stage-ffmpeg-macos.py',
+  'scripts/build-ffmpeg-macos.sh',
   '.gitmodules'
 )
 adaptive_stage = custom_target('adaptive mix stage',
@@ -437,6 +485,7 @@ adaptive_stage = custom_target('adaptive mix stage',
     '--profile', rust_profile, '--platform', adaptive_platform,
     '--source-root', source_root,
     '--output', meson.current_build_dir() / 'adaptive-mix.stamp'],
+  env: macos_env,
   build_by_default: true)
 
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
@@ -475,6 +524,11 @@ elif host_machine.system() == 'linux'
   auth_moc_headers += helper_webkit_moc_headers
   auth_dependencies += [dependency('webkit2gtk-4.1', version: '>=2.40')]
   auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
+elif host_machine.system() == 'darwin'
+  auth_sources += helper_browser_sources + helper_wkwebview_sources
+  auth_moc_headers += helper_webkit_moc_headers
+  auth_dependencies += [dependency('appleframeworks', modules: ['WebKit'])]
+  auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
 else
   auth_sources += helper_browser_sources
   auth_dependencies += [dependency('qt6', version: '>=6.8', modules: ['WebView', 'WebViewQuick'])]
@@ -487,10 +541,11 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
   auth_qrc + [auth_provider_resources],
   include_directories: app_inc,
   dependencies: auth_dependencies + [qt_entry_dep], cpp_args: auth_args,
+  objcpp_args: auth_args + ['-std=c++20', '-fobjc-arc'],
   win_subsystem: 'windows', install: true)
 
 # Apple Music's Widevine streams decrypt here, outside the app and without a browser.
-if host_machine.system() in ['linux', 'windows']
+if host_machine.system() in ['linux', 'windows', 'darwin']
   widevine_host_args = []
   widevine_host_deps = [cpp.find_library('dl', required: false)]
   if host_machine.system() == 'windows'
@@ -511,15 +566,48 @@ if host_machine.system() in ['linux', 'windows']
     install: true)
 endif
 
+# A team-signed bundle keeps one identity across rebuilds, so keychain access and privacy grants persist.
+# A distribution bundle ships Qt inside the app and signs with the hardened runtime.
+macos_profile = get_option('macos_provisioning_profile')
+if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribution)
+  macos_bundle_inputs = [orchard, auth_helper, widevine_host, adaptive_stage,
+    files('packaging/macos/Info.plist.in')]
+  macos_bundle_args = [
+    '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
+    '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
+    '--info-plist', '@INPUT4@', '--icon', files('packaging/macos/Orchard.icns'),
+    '--version', meson.project_version(), '--min-macos', macos_min,
+    '--identity', get_option('macos_codesign_identity'),
+    '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
+    '--output', '@OUTPUT@']
+  if macos_distribution
+    macos_bundle_args += ['--distribution',
+      '--macdeployqt', find_program('macdeployqt', dirs: qt_tool_dirs),
+      '--qml-dir', source_root / 'app/qml',
+      '--entitlements', files('packaging/macos/Orchard.entitlements')]
+  else
+    macos_bundle_inputs += files(macos_profile)
+    macos_bundle_args += ['--profile', '@INPUT5@']
+  endif
+  custom_target('Orchard.app',
+    input: macos_bundle_inputs,
+    output: 'Orchard.app',
+    command: [python, files('scripts/macos-bundle.py')] + macos_bundle_args,
+    depend_files: files('packaging/macos/Orchard.icns'),
+    build_by_default: true)
+endif
+
 qml_startup_test = executable('orchard_qml_startup_test',
   files('tests/qml_startup_test.cpp', 'tests/memory_ui_checks.cpp', 'tests/image_dimensions_checks.cpp'),
   objects: [orchard.extract_objects(qml_module, qmldir_resources, qml_files_qrc, assets_qrc, exe_moc,
     files('app/src/appearance/artwork_palette.cpp',
       'app/src/appearance/image_dimensions.cpp',
       'app/src/appearance/kawarp_background.cpp',
-      'app/src/appearance/liquid_glass.cpp')), app_lib.extract_objects(
+      'app/src/appearance/liquid_glass.cpp',
+      'app/src/appearance/video_hole.cpp')), app_lib.extract_objects(
     files('app/src/appearance/artwork_sampler.cpp',
-      'app/src/appearance/kawarp_artwork.cpp'))],
+      'app/src/appearance/kawarp_artwork.cpp',
+      'app/src/appearance/lucide_icon_provider.cpp'))],
   include_directories: app_inc,
   dependencies: [qt_dep, qt_gui_private], build_by_default: false)
 
@@ -546,10 +634,16 @@ if get_option('tests')
     headers: ['app/src/appearance/appearance_settings.h', 'app/src/window_state.h',
       'app/src/window_occlusion.h'],
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+  artwork_pause_objects = []
+  if host_machine.system() == 'darwin'
+    artwork_pause_objects += [app_lib.extract_objects(files('app/src/fullscreen_watch_mac.mm',
+      'app/src/occlusion_watch_mac.mm', 'app/src/window_chrome_mac.mm'))]
+  endif
   artwork_pause_test = executable('orchard_artwork_pause_tests',
     files('tests/artwork_pause_test.cpp', 'app/src/appearance/appearance_settings.cpp',
       'app/src/appearance/ui_scaling.cpp', 'app/src/window_state.cpp',
       'app/src/frameless_snap.cpp', 'app/src/window_occlusion.cpp') + artwork_pause_moc,
+    objects: artwork_pause_objects,
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private] + platform_deps)
   test('orchard_artwork_pause', artwork_pause_test, timeout: 30,
     env: ['QT_QPA_PLATFORM=offscreen'])

@@ -24,10 +24,14 @@
 #include <QPointer>
 #include <QTimer>
 
+#include <memory>
+
+class OcclusionWatch;
 class QWindow;
 
 // Reports whether the window is fully covered by other windows or cloaked.
-// X11 uses visibility events and Windows polls z-order; other platforms never report occlusion.
+// X11 uses visibility events, Windows polls z-order and macOS asks AppKit; other platforms
+// never report occlusion.
 class WindowOcclusion final : public QObject, public QAbstractNativeEventFilter
 {
     Q_OBJECT
@@ -51,6 +55,9 @@ private:
 
     QPointer<QWindow> m_window;
     QTimer m_timer;
+#ifdef Q_OS_MACOS
+    std::unique_ptr<OcclusionWatch> m_macWatch;
+#endif
     bool m_occluded{false};
     bool m_filterInstalled{false};
 };

@@ -143,7 +143,7 @@ ItemDelegate {
                             height: 14 * modelData
                             color: root.accentSoftColor
                             SequentialAnimation on height {
-                                running: OrchardPlayback.playing
+                                running: OrchardPlayback.playing && bar.visible && !OrchardWindowState.idle
                                 loops: Animation.Infinite
                                 NumberAnimation { to: 3; duration: 260 + bar.index * 90; easing.type: Easing.InOutSine }
                                 NumberAnimation { to: 14; duration: 300 + bar.index * 70; easing.type: Easing.InOutSine }

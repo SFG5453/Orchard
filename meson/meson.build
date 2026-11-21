@@ -7,6 +7,8 @@ app_sources = [
   'app/src/account/orchard_account.cpp',
   'app/src/account/orchard_account.h',
   'app/src/appearance/appearance_settings.cpp',
+  'app/src/appearance/lucide_icon_provider.cpp',
+  'app/src/appearance/lucide_icon_provider.h',
   'app/src/appearance/ui_scaling.cpp',
   'app/src/appearance/ui_scaling.h',
   'app/src/appearance/video_ambient.cpp',
@@ -288,6 +290,8 @@ app_sources = [
   'app/src/update/bootstrapper_client.h',
   'app/src/app_icon.cpp',
   'app/src/app_icon.h',
+  'app/src/graphics_memory.cpp',
+  'app/src/graphics_memory.h',
   'app/src/heap_trim.cpp',
   'app/src/heap_trim.h',
   'app/src/frameless_snap.cpp',
@@ -315,6 +319,8 @@ app_executable_sources = [
   'app/src/appearance/kawarp_background.h',
   'app/src/appearance/liquid_glass.cpp',
   'app/src/appearance/liquid_glass.h',
+  'app/src/appearance/video_hole.cpp',
+  'app/src/appearance/video_hole.h',
   'app/src/main.cpp',
   'app/src/instance_coordinator.cpp',
   'app/src/instance_coordinator.h',
@@ -349,7 +355,7 @@ helper_sources = [
   'app/src/orchard_core.h',
 ]
 
-# Spotify and Apple Music modes; without WebKitGTK they report no sign-in browser.
+# Spotify and Apple Music modes; without WebKitGTK or WKWebView they report no sign-in browser.
 helper_browser_sources = [
   'app/src/auth/spotify_helper.cpp',
   'app/src/auth/apple_music_helper.cpp',
@@ -361,6 +367,16 @@ helper_webkit_sources = [
   'app/src/auth/webkit_profile.h',
   'app/src/auth/webkit_view.cpp',
   'app/src/auth/webkit_view.h',
+]
+
+helper_wkwebview_sources = [
+  'app/src/auth/webkit_mac.h',
+  'app/src/auth/webkit_profile.h',
+  'app/src/auth/webkit_profile_mac.mm',
+  'app/src/auth/webkit_view.h',
+  'app/src/auth/webkit_view_mac.mm',
+  'app/src/auth/webkit_view_mac_delegate.h',
+  'app/src/auth/webkit_view_mac_delegate.mm',
 ]
 
 helper_webkit_moc_headers = [

@@ -85,7 +85,8 @@ GeneralSectionForm {
     function updateDetailFor(state, current, latest, channel, done, total, error) {
         switch (state) {
         case "ready": return qsTr("Orchard %1 is downloaded and verified.").arg(latest);
-        case "available": return qsTr("Install the update using your usual update method.");
+        case "available": return OrchardUpdates.downloadUrl ? qsTr("Download the disk image to install this update.")
+                                                             : qsTr("Install the update using your usual update method.");
         case "downloading": return total > 0 ? qsTr("%1 of %2").arg(root.megabytes(done)).arg(root.megabytes(total)) : "";
         case "staging": return qsTr("Putting files in place next to the running version.");
         case "error": return error;
@@ -94,6 +95,8 @@ GeneralSectionForm {
     }
 
     function updateActionFor(state) {
+        if (OrchardUpdates.downloadUrl)
+            return qsTr("Download update");
         switch (state) {
         case "ready": return qsTr("Restart");
         case "downloading": return qsTr("Cancel");
@@ -116,7 +119,9 @@ GeneralSectionForm {
     updateProgress: OrchardUpdates.total > 0 ? OrchardUpdates.downloaded / OrchardUpdates.total : 0
 
     updateButton.onClicked: {
-        if (OrchardUpdates.state === "ready")
+        if (OrchardUpdates.downloadUrl)
+            Qt.openUrlExternally(OrchardUpdates.downloadUrl);
+        else if (OrchardUpdates.state === "ready")
             OrchardUpdates.restartToUpdate();
         else if (OrchardUpdates.state === "downloading")
             OrchardUpdates.cancelDownload();

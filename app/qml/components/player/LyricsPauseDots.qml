@@ -39,7 +39,7 @@ Row {
     Behavior on opacity { NumberAnimation { duration: 240 } }
 
     NumberAnimation on phase {
-        running: dots.active && dots.running
+        running: dots.active && dots.running && !OrchardWindowState.idle
         from: 0
         to: 1
         duration: 2600
