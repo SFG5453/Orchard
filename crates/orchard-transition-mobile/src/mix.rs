@@ -158,7 +158,8 @@ static RUNTIME: OnceLock<Result<(), String>> = OnceLock::new();
 /// Binds `ort` to the ONNX Runtime the app package ships (already loaded by the JVM).
 fn runtime() -> Result<(), String> {
     RUNTIME.get_or_init(|| {
-        ort::init_from("libonnxruntime.so").map_err(|e| e.to_string())?.commit();
+        // Loads libonnxruntime.so; the single environment is created later by `models::ort_env`.
+        let _ = ort::init_from("libonnxruntime.so").map_err(|e| e.to_string())?;
         Ok(())
     }).clone()
 }

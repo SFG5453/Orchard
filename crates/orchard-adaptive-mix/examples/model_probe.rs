@@ -18,7 +18,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .map(|b| f32::from_le_bytes(*b))
         .collect();
-    let mut session = Session::builder()?
+    let env = ort::init().build()?;
+    let mut session = Session::builder(&env)?
         .with_intra_threads(2)?
         .with_inter_threads(1)?
         .with_config_entry("session.intra_op.allow_spinning", "0")?
