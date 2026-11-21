@@ -8,8 +8,15 @@ use crate::{
     downmix,
     npu::Npu,
 };
+use std::sync::LazyLock;
+
 use earmark::{AudioBuffer, WholeTrackAnalyzer};
-use ort::{session::{Session, builder::SessionBuilder}, value::Tensor};
+use ort::{
+    environment::Environment,
+    session::{Session, builder::SessionBuilder},
+    value::Tensor,
+};
+
 
 /// Nirovi exports; both take Beat This's `[1, 1500, 128]` spectrogram and return its logits.
 pub const GPU_BEAT: &str = "nirovi/nirovi_fp16.onnx";
@@ -26,10 +33,17 @@ pub struct Models {
     npu: Option<Npu>,
 }
 
+/// There can only be one `Environment` per process; it is created exactly once.
+fn ort_env() -> Result<Environment, String> {
+    static ENV: LazyLock<Result<Environment, String>> =
+        LazyLock::new(|| ort::init().build().map_err(|e| e.to_string()));
+    ENV.as_ref().map_err(|e| e.to_string()).cloned()
+}
+
 #[cfg(feature = "desktop")]
 fn session(path: &std::path::Path) -> Result<Session, String> {
     let provider = ort::ep::WebGPU::default().build().error_on_failure();
-    Session::builder()
+    Session::builder(&ort_env()?)
         .map_err(|e| e.to_string())?
         .with_execution_providers([provider])
         .map_err(|e| e.to_string())?
@@ -42,7 +56,7 @@ fn session(path: &std::path::Path) -> Result<Session, String> {
 
 // Idle pool threads sleep; spinning would steal cycles from playback.
 fn cpu_builder(threads: usize) -> Result<SessionBuilder, String> {
-    Session::builder()
+    Session::builder(&ort_env()?)
         .map_err(|e| e.to_string())?
         .with_intra_threads(threads)
         .map_err(|e| e.to_string())?
