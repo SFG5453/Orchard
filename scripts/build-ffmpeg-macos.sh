@@ -15,7 +15,10 @@ source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$build_root"
 build_root="$(cd -- "$build_root" && pwd)"
 prefix="$build_root/install"
-for tool in clang clang++ cmake ninja make pkg-config; do
+tools=(clang clang++ cmake ninja make pkg-config)
+# FFmpeg assembles its x86 code with nasm.
+if [[ "$arch" == x86_64 ]]; then tools+=(nasm); fi
+for tool in "${tools[@]}"; do
   command -v "$tool" >/dev/null || { echo "Missing FFmpeg build tool: $tool" >&2; exit 1; }
 done
 test -f "$source_root/third_party/ffmpeg/configure"
@@ -46,7 +49,7 @@ bash "$source_root/third_party/ffmpeg/configure" \
   --extra-ldflags="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -L$prefix/lib" \
   --disable-autodetect --disable-everything --disable-shared --enable-static --enable-pic \
   --enable-small --disable-checkasm --disable-debug --disable-doc --disable-ffplay --disable-avdevice \
-  --enable-ffmpeg --enable-ffprobe --enable-libwebp --enable-zlib \
+  --enable-ffmpeg --enable-ffprobe --enable-libwebp --enable-zlib --enable-securetransport \
   --enable-protocol=file,pipe,http,https,tcp,tls,crypto,data \
   --enable-demuxer=mov,hls,mpegts,matroska,mp3,flac,ogg,wav,aiff,asf,aac,ape,wv,image2,image2pipe,gif,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe \
   --enable-decoder=h264,hevc,vp8,vp9,mpeg4,gif,png,mjpeg,webp,bmp,aac,aac_latm,mp3,mp3float,flac,alac,opus,vorbis,wmav1,wmav2,wmapro,wmalossless,ape,wavpack,pcm_u8,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be,pcm_f32le,pcm_f32be,pcm_f64le \

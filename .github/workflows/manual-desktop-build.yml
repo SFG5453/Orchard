@@ -431,7 +431,10 @@ jobs:
             sleep $((attempt * 15))
           done
           rustup update stable
-          if [[ "${{ matrix.arch }}" == x86_64 ]]; then rustup target add x86_64-apple-darwin; fi
+          if [[ "${{ matrix.arch }}" == x86_64 ]]; then
+            brew install nasm
+            rustup target add x86_64-apple-darwin
+          fi
       - name: Restore macOS compiler cache
         uses: actions/cache/restore@v4
         with:
@@ -474,7 +477,7 @@ jobs:
       - name: Restore Intel ONNX Runtime
         if: matrix.arch == 'x86_64'
         id: ort-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/ort-x86_64
           key: orchard-macos-ort-x86_64-${{ env.ORT_VERSION }}-v1
@@ -487,6 +490,13 @@ jobs:
           OBJC: clang
           OBJCXX: clang++
         run: bash scripts/release/build-onnxruntime-macos.sh "$ORT_VERSION" "$RUNNER_TEMP" "$RUNNER_TEMP/ort-x86_64"
+      # Saved before the app build so a later failure keeps the library.
+      - name: Save Intel ONNX Runtime
+        if: matrix.arch == 'x86_64' && steps.ort-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ort-x86_64
+          key: ${{ steps.ort-cache.outputs.cache-primary-key }}
       - name: Build host qjsc
         if: matrix.arch == 'x86_64'
         run: |
