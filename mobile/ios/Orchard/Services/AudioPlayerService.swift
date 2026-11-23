@@ -27,7 +27,12 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var lyricsTask: Task<Void, Never>?
     private var artworkTask: Task<Void, Never>?
+    private var preloadTask: Task<Void, Never>?
     private var currentItemObserver: NSObjectProtocol?
+    private var failItemObserver: NSObjectProtocol?
+    private var isCompletingTrack: Bool = false
+    private var preloadedNextItem: AVPlayerItem?
+    private var preloadedNextTrackId: String?
 
     private let lastTrackKey = "orchard_last_track"
     private let lastPositionKey = "orchard_last_position"
@@ -203,12 +208,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
         updateRemoteCommandStates()
 
-        // Pre-fetch next track in queue for instant transition
-        if queueIndex + 1 < queue.count {
-            let nextTrack = queue[queueIndex + 1]
-            YouTubeMusicService.shared.prefetchStream(for: nextTrack.id, quality: selectedQuality)
-        }
-
         // Fetch synced lyrics concurrently
         lyricsTask = Task {
             let lyrics = await LyricsService.shared.fetchLyrics(for: track)
@@ -217,20 +216,41 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             }
         }
 
+        // Check if next track is pre-buffered for zero-latency seamless transition
+        if let preloaded = preloadedNextItem, preloadedNextTrackId == track.id, seekTo == 0 {
+            preloadedNextItem = nil
+            preloadedNextTrackId = nil
+            startPreloadedPlayback(with: preloaded, for: track)
+            return
+        }
+
         // Resolve stream (Video HLS manifest or Direct Audio) and start playback
         loadTask = Task {
             do {
-                let streamUrl: URL
-                if let directUrl = track.streamUrl {
-                    streamUrl = directUrl
-                } else if self.isVideoMode {
-                    streamUrl = try await YouTubeMusicService.shared.resolveVideoStreamUrl(for: track)
-                } else {
-                    streamUrl = try await YouTubeMusicService.shared.resolveStreamUrl(for: track.id, quality: selectedQuality)
+                var playableTrack = track
+                if track.id.hasPrefix("imported_") {
+                    if let resolved = await YouTubeMusicService.shared.resolveImportedTrack(title: track.title, artist: track.artist) {
+                        playableTrack = resolved
+                        await MainActor.run {
+                            self.currentTrack = resolved
+                            if let idx = self.queue.firstIndex(where: { $0.id == track.id }) {
+                                self.queue[idx] = resolved
+                            }
+                        }
+                    }
                 }
 
-                guard !Task.isCancelled, self.currentTrack?.id == track.id else { return }
-                startPlayback(with: streamUrl, for: track, seekTo: seekTo)
+                let streamUrl: URL
+                if let directUrl = playableTrack.streamUrl {
+                    streamUrl = directUrl
+                } else if self.isVideoMode {
+                    streamUrl = try await YouTubeMusicService.shared.resolveVideoStreamUrl(for: playableTrack)
+                } else {
+                    streamUrl = try await YouTubeMusicService.shared.resolveStreamUrl(for: playableTrack.id, quality: selectedQuality)
+                }
+
+                guard !Task.isCancelled, self.currentTrack?.id == playableTrack.id || self.currentTrack?.id == track.id else { return }
+                startPlayback(with: streamUrl, for: playableTrack, seekTo: seekTo)
             } catch {
                 if !Task.isCancelled {
                     print("[AudioPlayerService] Error resolving stream: \(error.localizedDescription)")
@@ -240,28 +260,120 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    private func startPlayback(with url: URL, for track: Track, seekTo: TimeInterval = 0) {
+    private func startPreloadedPlayback(with playerItem: AVPlayerItem, for track: Track) {
         cleanUpTimeObserver()
+        cleanUpItemObservers()
+        attachItemObservers(to: playerItem)
 
-        // Clean up previous item observer to prevent memory leak and duplicate notifications
+        if player == nil {
+            player = AVPlayer(playerItem: playerItem)
+            player?.automaticallyWaitsToMinimizeStalling = true
+        } else {
+            player?.replaceCurrentItem(with: playerItem)
+        }
+
+        player?.play()
+        self.isPlaying = true
+        self.isLoading = false
+
+        updateNowPlayingInfo(for: track)
+        setupTimeObserver()
+        preloadNextTrack()
+    }
+
+    private func cleanUpItemObservers() {
         if let obs = currentItemObserver {
             NotificationCenter.default.removeObserver(obs)
             currentItemObserver = nil
         }
+        if let obs = failItemObserver {
+            NotificationCenter.default.removeObserver(obs)
+            failItemObserver = nil
+        }
+    }
+
+    private func attachItemObservers(to item: AVPlayerItem) {
+        currentItemObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleTrackCompletion()
+        }
+
+        failItemObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleTrackCompletion()
+        }
+    }
+
+    private func preloadNextTrack() {
+        preloadTask?.cancel()
+        preloadTask = Task {
+            let nextIndex = queueIndex + 1
+            var candidateTrack: Track? = nil
+
+            if nextIndex < queue.count {
+                candidateTrack = queue[nextIndex]
+            } else if let current = currentTrack {
+                let recs = await YouTubeMusicService.shared.getRecommendations(for: current)
+                if let firstRec = recs.first {
+                    await MainActor.run {
+                        let newTracks = recs.filter { rec in !self.queue.contains(where: { $0.id == rec.id }) }
+                        if !newTracks.isEmpty {
+                            self.queue.append(contentsOf: newTracks)
+                        }
+                    }
+                    candidateTrack = firstRec
+                }
+            }
+
+            guard let trackToPreload = candidateTrack, !Task.isCancelled else { return }
+
+            var playableTrack = trackToPreload
+            if trackToPreload.id.hasPrefix("imported_") {
+                if let resolved = await YouTubeMusicService.shared.resolveImportedTrack(title: trackToPreload.title, artist: trackToPreload.artist) {
+                    playableTrack = resolved
+                }
+            }
+
+            guard let streamUrl = try? await YouTubeMusicService.shared.resolveStreamUrl(for: playableTrack.id, quality: selectedQuality),
+                  !Task.isCancelled else { return }
+
+            let asset = AVURLAsset(url: streamUrl)
+            let item = AVPlayerItem(asset: asset)
+            item.preferredForwardBufferDuration = 30.0
+            item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+
+            await MainActor.run {
+                self.preloadedNextItem = item
+                self.preloadedNextTrackId = trackToPreload.id
+            }
+        }
+    }
+
+    private func handleTrackCompletion() {
+        guard !isCompletingTrack else { return }
+        isCompletingTrack = true
+        self.next()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.isCompletingTrack = false
+        }
+    }
+
+    private func startPlayback(with url: URL, for track: Track, seekTo: TimeInterval = 0) {
+        cleanUpTimeObserver()
+        cleanUpItemObservers()
 
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
-        // High quality buffering buffer: 30.0s forward buffer prevents stalling without quality drop
         playerItem.preferredForwardBufferDuration = 30.0
         playerItem.canUseNetworkResourcesForLiveStreamingWhilePaused = true
 
-        currentItemObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: playerItem,
-            queue: .main
-        ) { [weak self] _ in
-            self?.next()
-        }
+        attachItemObservers(to: playerItem)
 
         if player == nil {
             player = AVPlayer(playerItem: playerItem)
@@ -281,6 +393,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
         updateNowPlayingInfo(for: track)
         setupTimeObserver()
+        preloadNextTrack()
     }
 
     // Toggle between Audio Mode and Music Video Mode seamlessly
@@ -372,22 +485,26 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         if queueIndex + 1 < queue.count {
             queueIndex += 1
             loadAndPlay(track: queue[queueIndex])
-        } else if queue.count > 1 {
-            // Loop back to start
-            queueIndex = 0
-            loadAndPlay(track: queue[0])
         } else if let current = currentTrack {
-            // Auto-fetch related recommendations for continuous flow
-            Task {
-                if let related = try? await YouTubeMusicService.shared.search(query: current.artist), !related.isEmpty {
-                    let nextTracks = related.filter { $0.id != current.id }
-                    if let first = nextTracks.first {
-                        self.queue.append(contentsOf: nextTracks)
-                        self.queueIndex += 1
-                        self.loadAndPlay(track: first)
-                    }
+            // Autoplay next recommendations seamlessly without repeating or stalling
+            self.isLoading = true
+            Task { @MainActor in
+                let recs = await YouTubeMusicService.shared.getRecommendations(for: current)
+                let newTracks = recs.filter { rec in !self.queue.contains(where: { $0.id == rec.id }) }
+                if !newTracks.isEmpty {
+                    self.queue.append(contentsOf: newTracks)
+                    self.queueIndex += 1
+                    self.loadAndPlay(track: self.queue[self.queueIndex])
+                } else if self.queue.count > 1 {
+                    self.queueIndex = 0
+                    self.loadAndPlay(track: self.queue[0])
+                } else {
+                    self.isLoading = false
                 }
             }
+        } else if queue.count > 1 {
+            queueIndex = 0
+            loadAndPlay(track: queue[0])
         }
     }
 
@@ -407,7 +524,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     @objc private func playerItemDidReachEnd() {
-        next()
+        handleTrackCompletion()
     }
 
     // MARK: - Time Observation
@@ -426,6 +543,13 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                     }
                 }
                 self.updateCurrentLyricIndex(for: seconds)
+
+                // Robust safety net: If track naturally reaches end and AVPlayer stalls at EOF
+                if self.duration > 5.0, seconds >= self.duration - 0.35 {
+                    if self.player?.timeControlStatus != .playing {
+                        self.handleTrackCompletion()
+                    }
+                }
             }
         }
     }

@@ -65,6 +65,8 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+    <key>NSAppleMusicUsageDescription</key>
+    <string>Orchard uses your Apple Music library to import your playlists and songs seamlessly.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>

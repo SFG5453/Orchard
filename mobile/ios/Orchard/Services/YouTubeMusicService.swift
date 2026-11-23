@@ -75,6 +75,57 @@ public final class YouTubeMusicService {
         return sections
     }
 
+    // Auto-advance recommendations based on current track
+    public func getRecommendations(for track: Track) async -> [Track] {
+        if let url = URL(string: "https://music.youtube.com/youtubei/v1/next") {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            request.setValue("https://music.youtube.com", forHTTPHeaderField: "Origin")
+            request.setValue("67", forHTTPHeaderField: "X-YouTube-Client-Name")
+            request.setValue(clientVersion, forHTTPHeaderField: "X-YouTube-Client-Version")
+
+            let payload: [String: Any] = [
+                "context": [
+                    "client": [
+                        "clientName": "WEB_REMIX",
+                        "clientVersion": clientVersion,
+                        "hl": "en",
+                        "gl": "US"
+                    ]
+                ],
+                "videoId": track.id
+            ]
+
+            if let body = try? JSONSerialization.data(withJSONObject: payload) {
+                request.httpBody = body
+                if let (data, response) = try? await session.data(for: request),
+                   (response as? HTTPURLResponse)?.statusCode == 200,
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let tracks = parseTracks(from: json).filter { $0.id != track.id }
+                    if !tracks.isEmpty {
+                        return tracks
+                    }
+                }
+            }
+        }
+
+        if let tracks = try? await search(query: "\(track.artist) songs"), !tracks.isEmpty {
+            return tracks.filter { $0.id != track.id }
+        }
+        return []
+    }
+
+    // Resolve an imported track from title & artist to playable YouTube Music track
+    public func resolveImportedTrack(title: String, artist: String) async -> Track? {
+        let query = "\(title) \(artist)"
+        if let results = try? await search(query: query), let best = results.first {
+            return best
+        }
+        return nil
+    }
+
     // MARK: - Direct Stream Extraction (Ad-Free, Unthrottled)
 
     private func fetchStreamingData(for videoId: String) async throws -> [String: Any] {

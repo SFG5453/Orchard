@@ -3,6 +3,8 @@ import SwiftUI
 public struct LibraryView: View {
     @ObservedObject var favorites = FavoritesService.shared
     @ObservedObject var player = AudioPlayerService.shared
+    @ObservedObject var playlistService = PlaylistService.shared
+    @State private var isImportSheetPresented: Bool = false
 
     public init() {}
 
@@ -13,6 +15,110 @@ public struct LibraryView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 26) {
+                        // Import Playlist Banner Card
+                        Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            isImportSheetPresented = true
+                        } label: {
+                            HStack(spacing: 16) {
+                                HStack(spacing: -8) {
+                                    Circle()
+                                        .fill(Color.pink)
+                                        .frame(width: 38, height: 38)
+                                        .overlay(Image(systemName: "apple.logo").font(.system(size: 16, weight: .bold)).foregroundColor(.white))
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 38, height: 38)
+                                        .overlay(Image(systemName: "music.note").font(.system(size: 16, weight: .bold)).foregroundColor(.black))
+                                }
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Import Playlists")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                    Text("Apple Music & Spotify sync")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.white.opacity(0.55))
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.purple)
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .fill(Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.8)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
+
+                        // My Playlists Section
+                        if !playlistService.playlists.isEmpty {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Text("Playlists")
+                                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 20)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 14) {
+                                        ForEach(playlistService.playlists) { playlist in
+                                            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    if let art = playlist.artworkUrl {
+                                                        AsyncImage(url: art) { img in
+                                                            img.resizable().aspectRatio(contentMode: .fill)
+                                                        } placeholder: {
+                                                            RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.1))
+                                                        }
+                                                        .frame(width: 140, height: 140)
+                                                        .cornerRadius(14)
+                                                    } else {
+                                                        ZStack {
+                                                            RoundedRectangle(cornerRadius: 14)
+                                                                .fill(playlist.source == .spotify ? Color.green.opacity(0.3) : Color.pink.opacity(0.3))
+                                                                .frame(width: 140, height: 140)
+                                                            Image(systemName: playlist.source == .spotify ? "music.note" : "apple.logo")
+                                                                .font(.system(size: 38))
+                                                                .foregroundColor(.white)
+                                                        }
+                                                    }
+
+                                                    Text(playlist.title)
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                        .foregroundColor(.white)
+                                                        .lineLimit(1)
+                                                        .frame(width: 140, alignment: .leading)
+
+                                                    HStack(spacing: 4) {
+                                                        Image(systemName: playlist.source.icon)
+                                                            .font(.system(size: 10))
+                                                        Text("\(playlist.tracks.count) tracks")
+                                                            .font(.system(size: 11))
+                                                    }
+                                                    .foregroundColor(.white.opacity(0.5))
+                                                    .frame(width: 140, alignment: .leading)
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                }
+                            }
+                        }
+
                         // Liked Songs Hero Card
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(alignment: .top) {
@@ -225,6 +331,9 @@ public struct LibraryView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.black, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .sheet(isPresented: $isImportSheetPresented) {
+                PlaylistImportSheet()
+            }
         }
     }
 }

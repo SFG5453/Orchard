@@ -9,20 +9,28 @@
 /* Begin PBXBuildFile section */
 		0E4C1FD36DC0FCB357B8B72B /* FavoritesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03B9BBC3E5698EAA1A3801A /* FavoritesService.swift */; };
 		10C55CFA2B158BAD676BB0EB /* AudioQualitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35C3938CECB055BC77C3010 /* AudioQualitySheet.swift */; };
+		118946312A1C710A9137A208 /* PlaylistImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D73F1C61D682858B7914B61 /* PlaylistImportSheet.swift */; };
 		11FFA69983C194A330F1D0C7 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEFBC507C47CB43CBC997D2F /* Color+Hex.swift */; };
 		124FF07F3E2E939F8C8FEF4F /* YouTubeMusicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */; };
+		1596642834897203DB021ED7 /* AppIcon60x60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 36663E52AED303031CA71343 /* AppIcon60x60@2x.png */; };
+		2FAF19F32D0D1311617CFC94 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7875D1505145149B78C18002 /* PlaylistDetailView.swift */; };
+		333B52587859FBD3E7FB51A0 /* PlaylistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A8001CA6CBF40A48CA9D38 /* PlaylistService.swift */; };
 		42B993E5C49D1A3F1690EDAD /* LyricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880DCB02D53F75F4636E2B4B /* LyricsView.swift */; };
 		4991BA1AB6E62044490105B6 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9141913A3EDE4CD1CE3D0B1 /* SearchView.swift */; };
 		49A0C727AFD67ED2CCD09853 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE7E974330F70B92AE1106E /* Track.swift */; };
 		4B042ED5282B2474318CCF2F /* OrchardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A2D3DEA42B0C6045418B26 /* OrchardApp.swift */; };
 		530F7A332E1D46C4FB629BA0 /* TrackContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7773A9D06E7D0976A02123D8 /* TrackContextMenu.swift */; };
+		65E240B020AC1CA483DB92D5 /* AppIcon60x60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 156CBACB2A9C5EA4F6A545E0 /* AppIcon60x60@3x.png */; };
 		6B7652A5C4B787884212C4D6 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */; };
 		6DD0EC13F791D86A64EF31F1 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B964C4E8C9019F71D14595C3 /* MiniPlayerView.swift */; };
 		81918CD07B679C51D73C225E /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA57B9138395237CC1832B45 /* PlayerView.swift */; };
 		88D1BA8F710CA4FBB9D78CC5 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7960A0C83C6565898CB5560 /* HomeView.swift */; };
 		9E864F71EC2C2042F5DFC785 /* LyricLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA868FB278B0D01E5819D7 /* LyricLine.swift */; };
+		A96ED207CB2DCAE746EFB93C /* AppIcon1024x1024.png in Resources */ = {isa = PBXBuildFile; fileRef = 013EA1A26E7083150080AAB0 /* AppIcon1024x1024.png */; };
 		B3F52857A9B26678B5B8BA1B /* AudioQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49ABC82A92009F413582EA06 /* AudioQuality.swift */; };
 		C0568DE8657FDA025F09EE99 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D13B03F1E2F12D4DCD7E805F /* MainTabView.swift */; };
+		CC27EF192F34A6F32FE12F72 /* Playlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1972214F69D6FA98F595E85E /* Playlist.swift */; };
+		D45D877CB3219AECF3ABA8B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 084C8E1DDDE074AE9733645C /* Assets.xcassets */; };
 		D8F0EB6FCF41E04471CE1F43 /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A191D6F88A7C6F982CDA40 /* QueueView.swift */; };
 		DFBB0F1D7A9027673B9E674A /* LyricsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FCDD54219466746E3FE524 /* LyricsService.swift */; };
 		E1FC752B05E1630483F72A0E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D8405ADAC861E3FA17B631 /* LibraryView.swift */; };
@@ -30,12 +38,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		013EA1A26E7083150080AAB0 /* AppIcon1024x1024.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon1024x1024.png; sourceTree = "<group>"; };
+		084C8E1DDDE074AE9733645C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		09D8405ADAC861E3FA17B631 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		12FCDD54219466746E3FE524 /* LyricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsService.swift; sourceTree = "<group>"; };
+		156CBACB2A9C5EA4F6A545E0 /* AppIcon60x60@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@3x.png"; sourceTree = "<group>"; };
+		1972214F69D6FA98F595E85E /* Playlist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Playlist.swift; sourceTree = "<group>"; };
+		1D73F1C61D682858B7914B61 /* PlaylistImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistImportSheet.swift; sourceTree = "<group>"; };
+		24A8001CA6CBF40A48CA9D38 /* PlaylistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistService.swift; sourceTree = "<group>"; };
+		36663E52AED303031CA71343 /* AppIcon60x60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "AppIcon60x60@2x.png"; sourceTree = "<group>"; };
 		49ABC82A92009F413582EA06 /* AudioQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQuality.swift; sourceTree = "<group>"; };
 		6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
 		7773A9D06E7D0976A02123D8 /* TrackContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackContextMenu.swift; sourceTree = "<group>"; };
 		77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeMusicService.swift; sourceTree = "<group>"; };
+		7875D1505145149B78C18002 /* PlaylistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistDetailView.swift; sourceTree = "<group>"; };
 		7ECA868FB278B0D01E5819D7 /* LyricLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricLine.swift; sourceTree = "<group>"; };
 		80A191D6F88A7C6F982CDA40 /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
 		880DCB02D53F75F4636E2B4B /* LyricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsView.swift; sourceTree = "<group>"; };
@@ -58,6 +74,7 @@
 		1A56095A5782D21A5D4D115D /* Orchard */ = {
 			isa = PBXGroup;
 			children = (
+				084C8E1DDDE074AE9733645C /* Assets.xcassets */,
 				CDD2577D4AEB3B4292E5D6A3 /* App */,
 				814F5110E98D0FDD21303B20 /* Models */,
 				E94F66BDAF0003AA79526A0D /* Services */,
@@ -88,6 +105,7 @@
 				49ABC82A92009F413582EA06 /* AudioQuality.swift */,
 				FEFBC507C47CB43CBC997D2F /* Color+Hex.swift */,
 				7ECA868FB278B0D01E5819D7 /* LyricLine.swift */,
+				1972214F69D6FA98F595E85E /* Playlist.swift */,
 				FDE7E974330F70B92AE1106E /* Track.swift */,
 			);
 			path = Models;
@@ -103,6 +121,8 @@
 				D13B03F1E2F12D4DCD7E805F /* MainTabView.swift */,
 				B964C4E8C9019F71D14595C3 /* MiniPlayerView.swift */,
 				FA57B9138395237CC1832B45 /* PlayerView.swift */,
+				7875D1505145149B78C18002 /* PlaylistDetailView.swift */,
+				1D73F1C61D682858B7914B61 /* PlaylistImportSheet.swift */,
 				80A191D6F88A7C6F982CDA40 /* QueueView.swift */,
 				F9141913A3EDE4CD1CE3D0B1 /* SearchView.swift */,
 				9D0F7FA48A98F32CDEEA5F63 /* ShimmerView.swift */,
@@ -114,6 +134,9 @@
 		CDD2577D4AEB3B4292E5D6A3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				36663E52AED303031CA71343 /* AppIcon60x60@2x.png */,
+				156CBACB2A9C5EA4F6A545E0 /* AppIcon60x60@3x.png */,
+				013EA1A26E7083150080AAB0 /* AppIcon1024x1024.png */,
 				A89D75D34A70C095C247D9D6 /* Info.plist */,
 				F6A2D3DEA42B0C6045418B26 /* OrchardApp.swift */,
 			);
@@ -126,6 +149,7 @@
 				6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */,
 				E03B9BBC3E5698EAA1A3801A /* FavoritesService.swift */,
 				12FCDD54219466746E3FE524 /* LyricsService.swift */,
+				24A8001CA6CBF40A48CA9D38 /* PlaylistService.swift */,
 				77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */,
 			);
 			path = Services;
@@ -139,7 +163,7 @@
 			buildConfigurationList = 88C45955271DE740EE0BCB6F /* Build configuration list for PBXNativeTarget "Orchard" */;
 			buildPhases = (
 				B10658D0089FA37ABB49975A /* Sources */,
-				AA0000000000000000000001 /* Compile Asset Catalog & App Icon */,
+				F0EB6BDBBCCD33247E9480DA /* Resources */,
 			);
 			buildRules = (
 			);
@@ -186,6 +210,20 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		F0EB6BDBBCCD33247E9480DA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A96ED207CB2DCAE746EFB93C /* AppIcon1024x1024.png in Resources */,
+				1596642834897203DB021ED7 /* AppIcon60x60@2x.png in Resources */,
+				65E240B020AC1CA483DB92D5 /* AppIcon60x60@3x.png in Resources */,
+				D45D877CB3219AECF3ABA8B2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		B10658D0089FA37ABB49975A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -205,6 +243,10 @@
 				6DD0EC13F791D86A64EF31F1 /* MiniPlayerView.swift in Sources */,
 				4B042ED5282B2474318CCF2F /* OrchardApp.swift in Sources */,
 				81918CD07B679C51D73C225E /* PlayerView.swift in Sources */,
+				CC27EF192F34A6F32FE12F72 /* Playlist.swift in Sources */,
+				2FAF19F32D0D1311617CFC94 /* PlaylistDetailView.swift in Sources */,
+				118946312A1C710A9137A208 /* PlaylistImportSheet.swift in Sources */,
+				333B52587859FBD3E7FB51A0 /* PlaylistService.swift in Sources */,
 				D8F0EB6FCF41E04471CE1F43 /* QueueView.swift in Sources */,
 				4991BA1AB6E62044490105B6 /* SearchView.swift in Sources */,
 				F5A7A44F1AA4C169EEDD8CD4 /* ShimmerView.swift in Sources */,
@@ -215,27 +257,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		AA0000000000000000000001 /* Compile Asset Catalog & App Icon */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Compile Asset Catalog & App Icon";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "xcrun actool --output-format human-readable-text --notices --warnings --output-partial-info-plist \"${DERIVED_FILE_DIR}/partial.plist\" --app-icon AppIcon --target-device iphone --minimum-deployment-target 17.0 --platform \"${PLATFORM_NAME}\" --compile \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\" \"${SRCROOT}/Orchard/Assets.xcassets\"\ncp -f \"${SRCROOT}/Orchard/Assets.xcassets/AppIcon.appiconset/\"*.png \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/\" 2>/dev/null || true\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		23B6D1E81F3721DD18136638 /* Release */ = {
