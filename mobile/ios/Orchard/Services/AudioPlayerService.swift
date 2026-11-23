@@ -40,9 +40,14 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private let lastDurationKey = "orchard_last_duration"
     private let lastQueueKey = "orchard_last_queue"
     private let lastQueueIndexKey = "orchard_last_queue_index"
+    private let lastQualityKey = "orchard_last_quality"
 
     override private init() {
         super.init()
+        if let savedQualityRaw = UserDefaults.standard.string(forKey: lastQualityKey),
+           let savedQuality = AudioQuality(rawValue: savedQualityRaw) {
+            self.selectedQuality = savedQuality
+        }
         setupAudioSession()
         setupRemoteCommands()
         setupLifecycleObservers()
@@ -67,6 +72,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     public func savePlaybackState() {
+        UserDefaults.standard.set(selectedQuality.rawValue, forKey: lastQualityKey)
         guard let track = currentTrack else { return }
         if let encoded = try? JSONEncoder().encode(track) {
             UserDefaults.standard.set(encoded, forKey: lastTrackKey)
@@ -80,6 +86,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func restorePlaybackState() {
+        if let savedQualityRaw = UserDefaults.standard.string(forKey: lastQualityKey),
+           let savedQuality = AudioQuality(rawValue: savedQualityRaw) {
+            self.selectedQuality = savedQuality
+        }
+
         guard let data = UserDefaults.standard.data(forKey: lastTrackKey),
               let track = try? JSONDecoder().decode(Track.self, from: data) else {
             return
@@ -361,6 +372,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     public func switchQuality(to quality: AudioQuality) {
         guard quality != selectedQuality else { return }
         self.selectedQuality = quality
+        UserDefaults.standard.set(quality.rawValue, forKey: lastQualityKey)
         guard let track = currentTrack else { return }
         guard !isVideoMode else { return }
 
