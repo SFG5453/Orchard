@@ -23,13 +23,14 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     public var avPlayer: AVPlayer? { player }
 
     private var timeObserver: Any?
-    private var queueIndex: Int = 0
+    var queueIndex: Int = 0
     private var loadTask: Task<Void, Never>?
     private var lyricsTask: Task<Void, Never>?
-    private var artworkTask: Task<Void, Never>?
+    var artworkTask: Task<Void, Never>?
     private var preloadTask: Task<Void, Never>?
     private var currentItemObserver: NSObjectProtocol?
     private var failItemObserver: NSObjectProtocol?
+    private var stallObserver: NSObjectProtocol?
     private var isCompletingTrack: Bool = false
     private var preloadedNextItem: AVPlayerItem?
     private var preloadedNextTrackId: String?
@@ -109,82 +110,9 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    private func setupAudioSession() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio)
-            try session.setActive(true)
-        } catch {
-            print("[AudioPlayerService] Failed to set up AVAudioSession: \(error.localizedDescription)")
-        }
-    }
+    // MARK: - Playback Core
 
-    // MARK: - Queue & Playback
-
-    public func play(track: Track) {
-        self.queue = [track]
-        self.queueIndex = 0
-        loadAndPlay(track: track)
-    }
-
-    public func playQueue(tracks: [Track], startIndex: Int = 0) {
-        guard !tracks.isEmpty, startIndex < tracks.count else { return }
-        self.queue = tracks
-        self.queueIndex = startIndex
-        loadAndPlay(track: tracks[startIndex])
-    }
-
-    public func addToQueueNext(track: Track) {
-        if queue.isEmpty || currentTrack == nil {
-            play(track: track)
-            return
-        }
-        let insertIndex = min(queueIndex + 1, queue.count)
-        queue.insert(track, at: insertIndex)
-        updateRemoteCommandStates()
-        YouTubeMusicService.shared.prefetchStream(for: track.id, quality: selectedQuality)
-    }
-
-    public func addToQueue(track: Track) {
-        if queue.isEmpty || currentTrack == nil {
-            play(track: track)
-            return
-        }
-        queue.append(track)
-        updateRemoteCommandStates()
-    }
-
-    public func removeFromQueue(at offsets: IndexSet) {
-        queue.remove(atOffsets: offsets)
-        if let current = currentTrack, let newIdx = queue.firstIndex(where: { $0.id == current.id }) {
-            queueIndex = newIdx
-        } else if queueIndex >= queue.count {
-            queueIndex = max(0, queue.count - 1)
-        }
-        updateRemoteCommandStates()
-    }
-
-    public func moveInQueue(from source: IndexSet, to destination: Int) {
-        queue.move(fromOffsets: source, toOffset: destination)
-        if let current = currentTrack, let newIdx = queue.firstIndex(where: { $0.id == current.id }) {
-            queueIndex = newIdx
-        }
-        updateRemoteCommandStates()
-    }
-
-    public func clearQueue() {
-        if let current = currentTrack {
-            queue = [current]
-            queueIndex = 0
-        } else {
-            queue = []
-            queueIndex = 0
-        }
-        updateRemoteCommandStates()
-    }
-
-    private func loadAndPlay(track: Track, seekTo: TimeInterval = 0) {
-        // Cancel prior streaming & lyrics load tasks to clean up pipeline and prevent stale track racing
+    func loadAndPlay(track: Track, seekTo: TimeInterval = 0) {
         loadTask?.cancel()
         lyricsTask?.cancel()
 
@@ -197,7 +125,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.currentLyricIndex = nil
         savePlaybackState()
 
-        // Record in Recently Played
         if let idx = recentlyPlayed.firstIndex(where: { $0.id == track.id }) {
             recentlyPlayed.remove(at: idx)
         }
@@ -208,7 +135,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
         updateRemoteCommandStates()
 
-        // Fetch synced lyrics concurrently
         lyricsTask = Task {
             let lyrics = await LyricsService.shared.fetchLyrics(for: track)
             if !Task.isCancelled && self.currentTrack?.id == track.id {
@@ -216,7 +142,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             }
         }
 
-        // Check if next track is pre-buffered for zero-latency seamless transition
         if let preloaded = preloadedNextItem, preloadedNextTrackId == track.id, seekTo == 0 {
             preloadedNextItem = nil
             preloadedNextTrackId = nil
@@ -224,7 +149,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             return
         }
 
-        // Resolve stream (Video HLS manifest or Direct Audio) and start playback
         loadTask = Task {
             do {
                 var playableTrack = track
@@ -290,6 +214,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             NotificationCenter.default.removeObserver(obs)
             failItemObserver = nil
         }
+        if let obs = stallObserver {
+            NotificationCenter.default.removeObserver(obs)
+            stallObserver = nil
+        }
     }
 
     private func attachItemObservers(to item: AVPlayerItem) {
@@ -307,6 +235,14 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.handleTrackCompletion()
+        }
+
+        stallObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.player?.play()
         }
     }
 
@@ -396,7 +332,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         preloadNextTrack()
     }
 
-    // Toggle between Audio Mode and Music Video Mode seamlessly
     public func toggleVideoMode() {
         self.isVideoMode.toggle()
         guard let track = currentTrack else { return }
@@ -423,7 +358,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    // Switch Audio Quality smoothly without interrupting playback
     public func switchQuality(to quality: AudioQuality) {
         guard quality != selectedQuality else { return }
         self.selectedQuality = quality
@@ -447,22 +381,35 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    public func togglePlayPause() {
+    // MARK: - Play / Pause / Seek Controls
+
+    public func playCurrent() {
+        try? AVAudioSession.sharedInstance().setActive(true, options: [])
         guard let player = player else {
             if let track = currentTrack {
                 loadAndPlay(track: track, seekTo: currentTime)
             }
             return
         }
-        if isPlaying {
-            player.pause()
-            isPlaying = false
-            savePlaybackState()
-        } else {
-            player.play()
-            isPlaying = true
-        }
+        player.play()
+        self.isPlaying = true
         updatePlaybackRateInNowPlaying()
+        savePlaybackState()
+    }
+
+    public func pauseCurrent() {
+        player?.pause()
+        self.isPlaying = false
+        updatePlaybackRateInNowPlaying()
+        savePlaybackState()
+    }
+
+    public func togglePlayPause() {
+        if isPlaying {
+            pauseCurrent()
+        } else {
+            playCurrent()
+        }
     }
 
     public func seek(to time: TimeInterval) {
@@ -480,53 +427,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    public func next() {
-        guard !queue.isEmpty else { return }
-        if queueIndex + 1 < queue.count {
-            queueIndex += 1
-            loadAndPlay(track: queue[queueIndex])
-        } else if let current = currentTrack {
-            // Autoplay next recommendations seamlessly without repeating or stalling
-            self.isLoading = true
-            Task { @MainActor in
-                let recs = await YouTubeMusicService.shared.getRecommendations(for: current)
-                let newTracks = recs.filter { rec in !self.queue.contains(where: { $0.id == rec.id }) }
-                if !newTracks.isEmpty {
-                    self.queue.append(contentsOf: newTracks)
-                    self.queueIndex += 1
-                    self.loadAndPlay(track: self.queue[self.queueIndex])
-                } else if self.queue.count > 1 {
-                    self.queueIndex = 0
-                    self.loadAndPlay(track: self.queue[0])
-                } else {
-                    self.isLoading = false
-                }
-            }
-        } else if queue.count > 1 {
-            queueIndex = 0
-            loadAndPlay(track: queue[0])
-        }
-    }
-
-    public func previous() {
-        guard !queue.isEmpty else { return }
-        if currentTime > 3.0 {
-            seek(to: 0)
-        } else if queueIndex > 0 {
-            queueIndex -= 1
-            loadAndPlay(track: queue[queueIndex])
-        } else if queue.count > 1 {
-            queueIndex = queue.count - 1
-            loadAndPlay(track: queue[queueIndex])
-        } else {
-            seek(to: 0)
-        }
-    }
-
-    @objc private func playerItemDidReachEnd() {
-        handleTrackCompletion()
-    }
-
     // MARK: - Time Observation
 
     private func setupTimeObserver() {
@@ -538,8 +438,9 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                 self.currentTime = seconds
                 if let item = self.player?.currentItem {
                     let dur = CMTimeGetSeconds(item.duration)
-                    if dur.isFinite && dur > 0 {
+                    if dur.isFinite && dur > 0 && abs(self.duration - dur) > 0.5 {
                         self.duration = dur
+                        self.updateNowPlayingDuration(dur)
                     }
                 }
                 self.updateCurrentLyricIndex(for: seconds)
@@ -578,130 +479,5 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         if currentLyricIndex != foundIndex {
             currentLyricIndex = foundIndex
         }
-    }
-
-    // MARK: - Lock Screen & Dynamic Island (MPRemoteCommandCenter)
-
-    private func setupRemoteCommands() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-
-        // Play / Pause / Toggle
-        commandCenter.playCommand.isEnabled = true
-        commandCenter.playCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            if !self.isPlaying {
-                self.togglePlayPause()
-                return .success
-            }
-            return .commandFailed
-        }
-
-        commandCenter.pauseCommand.isEnabled = true
-        commandCenter.pauseCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            if self.isPlaying {
-                self.togglePlayPause()
-                return .success
-            }
-            return .commandFailed
-        }
-
-        commandCenter.togglePlayPauseCommand.isEnabled = true
-        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
-            return .success
-        }
-
-        // Forward / Next Track
-        commandCenter.nextTrackCommand.isEnabled = true
-        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            self.next()
-            return .success
-        }
-
-        // Backward / Previous Track
-        commandCenter.previousTrackCommand.isEnabled = true
-        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
-            self.previous()
-            return .success
-        }
-
-        // Disable Skip 15s so Lock Screen, Notification Center & Dynamic Island display Previous Track ⏮ & Next Track ⏭
-        commandCenter.skipForwardCommand.isEnabled = false
-        commandCenter.skipBackwardCommand.isEnabled = false
-
-        // Seek Bar (Scrubbing from Lock Screen / Dynamic Island)
-        commandCenter.changePlaybackPositionCommand.isEnabled = true
-        commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let self = self,
-                  let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
-                return .commandFailed
-            }
-            self.seek(to: positionEvent.positionTime)
-            return .success
-        }
-
-        updateRemoteCommandStates()
-    }
-
-    private func updateRemoteCommandStates() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-        commandCenter.playCommand.isEnabled = true
-        commandCenter.pauseCommand.isEnabled = true
-        commandCenter.togglePlayPauseCommand.isEnabled = true
-        commandCenter.nextTrackCommand.isEnabled = true
-        commandCenter.previousTrackCommand.isEnabled = true
-        commandCenter.skipForwardCommand.isEnabled = false
-        commandCenter.skipBackwardCommand.isEnabled = false
-        commandCenter.changePlaybackPositionCommand.isEnabled = true
-    }
-
-    private func updateNowPlayingInfo(for track: Track) {
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: track.title,
-            MPMediaItemPropertyArtist: track.artist,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: 0.0,
-            MPMediaItemPropertyPlaybackDuration: max(duration, 1.0),
-            MPNowPlayingInfoPropertyPlaybackRate: 1.0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
-            MPNowPlayingInfoPropertyPlaybackQueueCount: max(queue.count, 1),
-            MPNowPlayingInfoPropertyPlaybackQueueIndex: queueIndex
-        ]
-        if let album = track.album {
-            info[MPMediaItemPropertyAlbumTitle] = album
-        }
-
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-
-        artworkTask?.cancel()
-        if let artworkUrl = track.artworkUrl {
-            artworkTask = Task {
-                if let (data, _) = try? await URLSession.shared.data(from: artworkUrl),
-                   let image = UIImage(data: data) {
-                    guard !Task.isCancelled, self.currentTrack?.id == track.id else { return }
-                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                    var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                    currentInfo[MPMediaItemPropertyArtwork] = artwork
-                    MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
-                }
-            }
-        }
-    }
-
-    private func updatePlaybackRateInNowPlaying() {
-        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-
-    private func updateNowPlayingElapsed() {
-        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
-        info[MPMediaItemPropertyPlaybackDuration] = max(duration, 1.0)
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 }
