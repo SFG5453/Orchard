@@ -127,18 +127,21 @@ for library in build_dir.glob("*.dylib"):
     shutil.copy2(library, macos / library.name, follow_symlinks=False)
     origins.setdefault(macos / library.name, library)
 # FFmpeg tools are staged with the adaptive worker and signed as bundle code.
-for name in ("ffmpeg", "ffprobe", "ffmpeg-LICENSE.txt"):
+for name in ("ffmpeg", "ffprobe"):
     source = build_dir / name
     if not source.is_file():
         fail(f"missing {source}")
     shutil.copy2(source, macos / name)
-    if name != "ffmpeg-LICENSE.txt":
-        (macos / name).chmod((macos / name).stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        origins[macos / name] = source
+    (macos / name).chmod((macos / name).stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    origins[macos / name] = source
+# macdeployqt ad-hoc signs any file in Contents/MacOS, and Gatekeeper rejects that signature.
+license_file = build_dir / "ffmpeg-LICENSE.txt"
+if not license_file.is_file():
+    fail(f"missing {license_file}")
 (contents / "Resources").mkdir(exist_ok=True)
 shutil.copy2(root / "LICENSE", contents / "Resources/LICENSE")
 shutil.copy2(root / "THIRD_PARTY_NOTICES.md", contents / "Resources/THIRD_PARTY_NOTICES.md")
-shutil.copy2(build_dir / "ffmpeg-LICENSE.txt", contents / "Resources/FFmpeg-LICENSE.txt")
+shutil.copy2(license_file, contents / "Resources/FFmpeg-LICENSE.txt")
 # Contents/MacOS is sealed as code, so data lives in Resources.
 if (build_dir / "models").is_dir():
     shutil.copytree(build_dir / "models", contents / "Resources/models", symlinks=True)

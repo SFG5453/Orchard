@@ -390,9 +390,6 @@ jobs:
         arch: ${{ fromJSON(inputs.platforms == 'macos-arm64' && '["arm64"]' || inputs.platforms == 'macos-x86_64' && '["x86_64"]' || '["arm64","x86_64"]') }}
     env:
       ORT_VERSION: v1.31.0
-      # microsoft/onnxruntime no longer exists on GitHub, so the source comes from a fork pinned by hash.
-      ORT_SOURCE_URL: https://codeload.github.com/ossia/onnxruntime/tar.gz/refs/tags/v1.31.0
-      ORT_SOURCE_SHA256: a7e84230b5d509e48fbd6b73c2453a56345ccb22da34a46dac1f0cb4a2d6507b
       CCACHE_DIR: ${{ github.workspace }}/build-cache/macos-${{ matrix.arch }}-ccache
       CCACHE_MAXSIZE: 2G
       CCACHE_COMPRESS: 'true'
@@ -489,17 +486,7 @@ jobs:
           CXX: clang++
           OBJC: clang
           OBJCXX: clang++
-        run: |
-          mkdir -p "$RUNNER_TEMP/onnxruntime"
-          curl -fL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/onnxruntime.tar.gz" "$ORT_SOURCE_URL"
-          echo "$ORT_SOURCE_SHA256  $RUNNER_TEMP/onnxruntime.tar.gz" | shasum -a 256 -c -
-          tar -xzf "$RUNNER_TEMP/onnxruntime.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/onnxruntime"
-          cd "$RUNNER_TEMP/onnxruntime"
-          ./build.sh --config Release --build_shared_lib --parallel --skip_tests --compile_no_warning_as_error \
-            --apple_deploy_target 14.4 --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
-          mkdir -p "$RUNNER_TEMP/ort-x86_64"
-          cp -a build/MacOS/Release/libonnxruntime*.dylib "$RUNNER_TEMP/ort-x86_64/"
-          lipo -archs "$RUNNER_TEMP/ort-x86_64/libonnxruntime.dylib" | grep -qx x86_64
+        run: bash scripts/release/build-onnxruntime-macos.sh "$ORT_VERSION" "$RUNNER_TEMP" "$RUNNER_TEMP/ort-x86_64"
       - name: Build host qjsc
         if: matrix.arch == 'x86_64'
         run: |
