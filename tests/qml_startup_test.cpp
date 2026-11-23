@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "appearance/lucide_icon_provider.h"
+
 #include <QGuiApplication>
 #include <QQuickStyle>
 #include <QFile>
@@ -299,6 +301,8 @@ int main(int argc, char *argv[]) {
   }
 
   QQmlEngine engine;
+  // The engine owns the provider.
+  engine.addImageProvider(QStringLiteral("lucide"), new LucideIconProvider);
   QQmlComponent component(&engine,
       QUrl(QStringLiteral("qrc:/qt/qml/Orchard/app/qml/Main.qml")),
       QQmlComponent::PreferSynchronous);

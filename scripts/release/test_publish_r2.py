@@ -53,6 +53,10 @@ class PublishTest(unittest.TestCase):
             path.mkdir()
         for path in self.paths[2:]:
             path.write_bytes(b"placeholder")
+        self.arm64_dmg = Path(self.temp.name) / "Orchard-macOS-arm64.dmg"
+        self.x86_64_dmg = Path(self.temp.name) / "Orchard-macOS-x86_64.dmg"
+        self.arm64_dmg.write_bytes(b"arm64 disk image")
+        self.x86_64_dmg.write_bytes(b"x86_64 disk image")
 
     def fake_release(self, *args):
         self.release_calls.append(args)
@@ -72,7 +76,8 @@ class PublishTest(unittest.TestCase):
                 patch.object(PUBLISH, "remote_bytes", return_value=current), \
                 patch.object(PUBLISH, "remote_keys", return_value=set()), \
                 patch.object(PUBLISH, "run_release", side_effect=self.fake_release):
-            PUBLISH.publish(store, "release-bucket", "canary", *self.paths)
+            PUBLISH.publish(store, "release-bucket", "canary", *self.paths,
+                            macos_arm64_dmg=self.arm64_dmg, macos_x86_64_dmg=self.x86_64_dmg)
 
     def test_channel_is_last_after_both_platforms_and_installers(self):
         store = RecordingR2()
@@ -86,13 +91,23 @@ class PublishTest(unittest.TestCase):
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Linux-x86_64.AppImage", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Windows-x86_64.7z", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/{self.paths[3].name}", store.keys)
+        self.assertEqual(store.bodies[f"downloads/canary/{VERSION}/Orchard-macOS-arm64.dmg"],
+                         b"arm64 disk image")
+        self.assertEqual(store.bodies[f"downloads/canary/{VERSION}/Orchard-macOS-x86_64.dmg"],
+                         b"x86_64 disk image")
 
-    def test_notes_name_the_arch_package_before_the_channel_moves(self):
+    def test_notes_list_arch_and_macos_downloads_before_the_channel_moves(self):
         store = RecordingR2()
         self.run_publish(store)
         self.assertEqual(store.keys[-2], "releases/canary-notes.json")
         notes = json.loads(store.bodies["releases/canary-notes.json"])
         self.assertEqual(notes[0]["archPackage"], self.paths[3].name)
+        self.assertEqual(notes[0]["macos"], {
+            "arm64": "Orchard-macOS-arm64.dmg",
+            "x86_64": "Orchard-macOS-x86_64.dmg",
+        })
+        for name in notes[0]["macos"].values():
+            self.assertIn(f"downloads/canary/{VERSION}/{name}", store.bodies)
 
     def test_release_requires_the_published_bootstrapper(self):
         self.run_publish(RecordingR2())
@@ -101,6 +116,8 @@ class PublishTest(unittest.TestCase):
             self.assertEqual(args[args.index("--minimum-bootstrapper") + 1], "1.0.1")
         channel = self.release_calls[-1]
         self.assertEqual(channel[channel.index("--bootstrapper-version") + 1], "1.0.1")
+        self.assertEqual(channel[channel.index("--macos-arm64-dmg") + 1], self.arm64_dmg.name)
+        self.assertEqual(channel[channel.index("--macos-x86-64-dmg") + 1], self.x86_64_dmg.name)
 
     def test_failed_manifest_upload_leaves_channel_untouched(self):
         store = RecordingR2(fail_at=f"manifests/{VERSION}-win-x86_64.json")
@@ -112,6 +129,13 @@ class PublishTest(unittest.TestCase):
         store = RecordingR2(fail_at=f"downloads/canary/{VERSION}/{self.paths[3].name}")
         with self.assertRaisesRegex(RuntimeError, "simulated R2"):
             self.run_publish(store)
+        self.assertNotIn("releases/canary.json", store.keys)
+
+    def test_failed_dmg_upload_leaves_channel_untouched(self):
+        store = RecordingR2(fail_at=f"downloads/canary/{VERSION}/{self.x86_64_dmg.name}")
+        with self.assertRaisesRegex(RuntimeError, "simulated R2"):
+            self.run_publish(store)
+        self.assertNotIn("releases/canary-notes.json", store.keys)
         self.assertNotIn("releases/canary.json", store.keys)
 
     def test_reusing_a_published_version_is_rejected_before_upload(self):

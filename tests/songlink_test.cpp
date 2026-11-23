@@ -19,6 +19,7 @@
 
 #include "backend_info.h"
 #include <QClipboard>
+#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QTest>
 

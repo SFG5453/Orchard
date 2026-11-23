@@ -32,8 +32,10 @@
 #include "appearance/appearance_settings.h"
 #include "appearance/ui_scaling.h"
 #include "appearance/animated_artwork_service.h"
+#include "appearance/lucide_icon_provider.h"
 #include "appearance/artwork_video_cache.h"
 #include "app_icon.h"
+#include "graphics_memory.h"
 #include "heap_trim.h"
 #include "home/home_controller.h"
 #include "integrations/integrations.h"
@@ -63,6 +65,10 @@
 #include "support/support_center.h"
 #include "system_media_bridge.h"
 #include "system_tray.h"
+#ifdef Q_OS_MACOS
+#include "dock_reopen_mac.h"
+#include "mac_menus.h"
+#endif
 #include "startup_settings.h"
 #include "update/bootstrapper_client.h"
 #include "window_state.h"
@@ -87,7 +93,9 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
+#ifndef Q_OS_MACOS
 #include <QVulkanInstance>
+#endif
 #include <chrono>
 #include <cstdlib>
 #include <memory>
@@ -175,6 +183,12 @@ int main(int argc, char *argv[]) {
   QCoreApplication::setOrganizationName(QStringLiteral("SFG545"));
   QCoreApplication::setApplicationName(QStringLiteral("Orchard"));
   UiScaling::configure();
+  configureGraphicsMemory();
+#ifdef Q_OS_MACOS
+  // Native FairPlay video sits under the window and shows through a transparent hole;
+  // without an alpha channel Qt keeps its Metal layer opaque and the hole draws black.
+  QQuickWindow::setDefaultAlphaBuffer(true);
+#endif
 
   // QApplication for QSystemTrayIcon, whose menus are still widgets in 2026.
   QApplication application(argc, argv);
@@ -194,12 +208,19 @@ int main(int argc, char *argv[]) {
   }
   UiScaling::applyAuto();
 
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+  // Analysis workers inherit this; packaged builds use their bundled FFmpeg.
 #ifdef Q_OS_WIN
-  // Analysis workers inherit this; Windows has no ffmpeg on PATH to fall back to.
   const QString bundledFfmpeg =
       QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
   if (!qEnvironmentVariableIsSet("ORCHARD_FFMPEG") && QFileInfo::exists(bundledFfmpeg))
     qputenv("ORCHARD_FFMPEG", QDir::toNativeSeparators(bundledFfmpeg).toUtf8());
+#else
+  const QString bundledFfmpeg =
+      QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg"));
+  if (!qEnvironmentVariableIsSet("ORCHARD_FFMPEG") && QFileInfo::exists(bundledFfmpeg))
+    qputenv("ORCHARD_FFMPEG", QFile::encodeName(bundledFfmpeg));
+#endif
 #endif
 
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID) && QT_CONFIG(vulkan) && __has_include(<vulkan/vulkan.h>)
@@ -334,6 +355,10 @@ int main(int argc, char *argv[]) {
                     &appleMusic, &catalogSource, &offlineLibrary, libraryActions.get(), &connectService);
   localApi.start();
   SystemTray tray(playback.get(), &authManager);
+#ifdef Q_OS_MACOS
+  MacMenus macMenus(playback.get());
+  DockReopen dockReopen([&tray] { tray.showWindow(); });
+#endif
   WindowState windowState;
   const auto syncArtworkPause = [&] {
     windowState.setPauseArtworkInBackground(appearance.pauseArtworkInBackground());
@@ -369,6 +394,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSupport"), &support);
   // The engine owns the provider; support outlives the engine.
   engine.addImageProvider(QStringLiteral("support"), new SupportImageProvider(&support));
+  engine.addImageProvider(QStringLiteral("lucide"), new LucideIconProvider);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardHome"),
                                            homeController.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSearch"),
@@ -421,6 +447,9 @@ int main(int argc, char *argv[]) {
 
   if (auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst())) {
     tray.setWindow(window);
+#ifdef Q_OS_MACOS
+    macMenus.setWindow(window);
+#endif
     windowState.setWindow(window);
 #ifdef Q_OS_WIN
     systemMedia.start(window->winId());

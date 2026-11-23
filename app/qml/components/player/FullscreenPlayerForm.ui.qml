@@ -314,7 +314,7 @@ Item {
         Behavior on opacity { enabled: !root.reactive; NumberAnimation { duration: 500 } }
 
         SequentialAnimation on breath {
-            running: root.visible && root.playing && !root.reactive
+            running: root.visible && root.playing && !root.reactive && !OrchardWindowState.idle
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: 2600; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 2600; easing.type: Easing.InOutSine }

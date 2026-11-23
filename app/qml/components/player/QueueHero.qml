@@ -90,7 +90,7 @@ Rectangle {
                             color: panel.accentColor
                             height: 3
                             SequentialAnimation on height {
-                                running: OrchardPlayback.playing && panel.visible
+                                running: OrchardPlayback.playing && panel.visible && !OrchardWindowState.idle
                                 loops: Animation.Infinite
                                 onRunningChanged: if (!running) bar.height = 3
                                 NumberAnimation { to: 10; duration: 260 + bar.index * 90; easing.type: Easing.InOutSine }

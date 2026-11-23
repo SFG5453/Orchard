@@ -26,6 +26,7 @@
 #include <functional>
 
 // A second launch forwards links and asks the existing process to show its window.
+// macOS sends links to the running process as open-URL events instead.
 class InstanceCoordinator final : public QObject {
 public:
   enum class StartResult { Primary, Forwarded, Failed };
@@ -34,6 +35,9 @@ public:
   [[nodiscard]] StartResult start(const QStringList &arguments = {});
   void setActivationHandler(std::function<void()> handler);
   void setLinkHandler(std::function<void(const QString &)> handler);
+
+protected:
+  bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
   [[nodiscard]] bool requestActivation(const QStringList &arguments) const;

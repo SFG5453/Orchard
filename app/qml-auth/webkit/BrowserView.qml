@@ -20,8 +20,8 @@
 import QtQuick
 import Orchard.Auth
 
-// Sign-in browser on Linux. The helper never shows the QQuickView this sits in:
-// WebKitView opens its own GTK window, sized and titled after that view.
+// Sign-in browser on Linux and macOS. The helper never shows the QQuickView this
+// sits in: WebKitView opens its own native window, sized and titled after that view.
 Item {
     id: root
 

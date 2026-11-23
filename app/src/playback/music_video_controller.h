@@ -33,6 +33,7 @@
 #include <QVariantMap>
 
 class AppleMusic;
+class AppleMusicFairPlay;
 class AppleMusicPicture;
 class AuthManager;
 class QVideoSink;
@@ -71,6 +72,8 @@ class MusicVideoController final : public QObject {
   Q_PROPERTY(int miniCorner READ miniCorner WRITE setMiniCorner NOTIFY changed)
   // The full-window theater is showing.
   Q_PROPERTY(bool theater READ theater NOTIFY changed)
+  // The picture is a native macOS layer under the window; Qt only leaves a hole for it.
+  Q_PROPERTY(bool nativePicture READ nativePicture NOTIFY changed)
 public:
   MusicVideoController(YouTubeProvider *provider, AuthManager *auth, PlaybackController *playback,
                        QObject *parent = nullptr);
@@ -100,6 +103,7 @@ public:
   [[nodiscard]] int miniCorner() const { return m_miniCorner; }
   void setMiniCorner(int corner);
   [[nodiscard]] bool theater() const { return m_open && !m_pip && !m_mini; }
+  [[nodiscard]] bool nativePicture() const { return m_native; }
 
   Q_INVOKABLE void show();
   // Plays a video row from the catalog and opens the theater on it.
@@ -111,6 +115,9 @@ public:
   Q_INVOKABLE void watchFrames(QObject *sink);
   // Drops `sink` only if it is still the one fed, so an outgoing view never blanks its successor.
   Q_INVOKABLE void releaseFrames(QObject *sink);
+  // The item a native picture fills, and its release on the same terms as releaseFrames().
+  Q_INVOKABLE void attachNative(QObject *item);
+  Q_INVOKABLE void detachNative(QObject *item);
   // Saved floating window geometry, placed on a connected screen.
   Q_INVOKABLE QRect pipGeometry() const;
   Q_INVOKABLE void savePipGeometry(const QRect &geometry);
@@ -166,6 +173,11 @@ private:
   QHash<QString, QString> m_appleLookups;
   AppleMusic *m_account{nullptr};
   AppleMusicPicture *m_applePicture{nullptr};
+  // macOS only: FairPlay pictures, falling back to m_applePicture for a video it fails.
+  AppleMusicFairPlay *m_fairPlay{nullptr};
+  QPointer<QObject> m_nativeSurface;
+  bool m_native{false};
+  bool m_fairPlayFailed{false};
   // The picture is an Apple Music video; m_videoId holds its catalog id.
   bool m_apple{false};
   // That video belongs to an Apple song, so the engine swaps to the video's soundtrack.

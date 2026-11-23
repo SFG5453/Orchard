@@ -106,7 +106,7 @@ See [Offline mode and downloads](docs/app/offline-mode.md), [Local files](docs/a
 - **Apple Music videos:** watch videos from Apple Music on desktop, up to 1080p on Windows with HDCP displays and 486p on Linux.
 - **Library changes:** love songs, create playlists, and add songs to your Apple Music playlists from Orchard.
 
-Orchard never mixes the two services on one page. Apple Music playback needs Widevine: on Linux, install Google Chrome or Chromium with Widevine; on Windows, open Microsoft Edge or Google Chrome once. Android uses the phone's own Widevine. An Orchard account is also required. See [Integrations](docs/app/integrations.md#play-apple-music-songs).
+Orchard never mixes the two services on one page. Apple Music playback needs Widevine: on Linux, install Google Chrome or Chromium with Widevine; on Windows, open Microsoft Edge or Google Chrome once; on macOS, install Google Chrome or Firefox. Android uses the phone's own Widevine. An Orchard account is also required. See [Integrations](docs/app/integrations.md#play-apple-music-songs).
 
 ### Listen across devices
 

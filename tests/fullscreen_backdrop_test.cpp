@@ -22,6 +22,12 @@ private slots:
     const QString path = directory.filePath("art.png");
     QVERIFY(artwork.save(path));
     QQmlEngine engine;
+    QQmlPropertyMap appearance;
+    appearance.insert(QStringLiteral("backgroundQuality"), QStringLiteral("medium"));
+    engine.rootContext()->setContextProperty(QStringLiteral("OrchardAppearance"), &appearance);
+    QQmlPropertyMap windowState;
+    windowState.insert(QStringLiteral("idle"), false);
+    engine.rootContext()->setContextProperty(QStringLiteral("OrchardWindowState"), &windowState);
     QQmlComponent component(&engine);
     const QByteArray qml = QByteArrayLiteral("import QtQuick\nimport \"")
         + QUrl::fromLocalFile(QStringLiteral(ORCHARD_SOURCE_DIR "/app/qml/components/player")).toEncoded()

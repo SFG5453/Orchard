@@ -36,6 +36,7 @@ class BootstrapperClient final : public QObject
     Q_PROPERTY(QString latestVersion READ latestVersion NOTIFY changed)
     Q_PROPERTY(QString channel READ channel NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
+    Q_PROPERTY(QString downloadUrl READ downloadUrl NOTIFY changed)
     Q_PROPERTY(qint64 downloaded READ downloaded NOTIFY changed)
     Q_PROPERTY(qint64 total READ total NOTIFY changed)
     Q_PROPERTY(bool autoUpdate READ autoUpdate NOTIFY changed)
@@ -51,6 +52,7 @@ public:
     [[nodiscard]] QString latestVersion() const { return m_latest; }
     [[nodiscard]] QString channel() const { return m_channel; }
     [[nodiscard]] QString error() const { return m_error; }
+    [[nodiscard]] QString downloadUrl() const;
     [[nodiscard]] qint64 downloaded() const { return m_downloaded; }
     [[nodiscard]] qint64 total() const { return m_total; }
     [[nodiscard]] bool autoUpdate() const { return m_autoUpdate; }
@@ -83,6 +85,7 @@ private:
     QString m_notifiedVersion;
     QString m_channel;
     QString m_error;
+    QString m_macosArch;
     qint64 m_downloaded{0};
     qint64 m_total{0};
     bool m_autoUpdate{true};
