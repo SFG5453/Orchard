@@ -1,5 +1,29 @@
 [
   {
+    "version": "2.0.12-canary.1",
+    "date": "2026-11-23",
+    "title": "Orchard on macOS",
+    "sections": [
+      {
+        "title": "macOS",
+        "items": [
+          "Orchard is available for Macs with Apple silicon or Intel, on macOS 14.4 or later. Each has its own signed and notarized disk image.",
+          "The window uses native macOS buttons, resizing and full screen. A menu bar and a Dock menu control playback, and clicking the Dock icon brings back a hidden window.",
+          "Apple Music songs, including Atmos, play on macOS with Widevine from Google Chrome, Microsoft Edge, Brave, or Firefox and its forks. Apple Music videos play through FairPlay.",
+          "Orchard checks for updates on macOS. When one is available, download its disk image from Settings, General.",
+          "Local lyric translation is not available on Intel Macs. The other translation sources work."
+        ]
+      },
+      {
+        "title": "Performance",
+        "items": [
+          "The animated mesh background redraws far less often, and several player and queue animations pause while the window is hidden or fully covered.",
+          "Icons draw without a shader pass for each one, which lightens the interface on every desktop platform."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.11-canary.1",
     "date": "2026-11-20",
     "title": "Compact Glade volume fix",
