@@ -78,8 +78,21 @@ Item {
         return tag ? tag[1].charAt(0).toUpperCase() + tag[1].slice(1).toLowerCase() : "";
     }
 
-    function markdownOf(version, title, date, sections) {
+    // The optional announcement of a release; every field is empty without one.
+    function calloutOf(value) {
+        const callout = value || {};
+        return {
+            title: String(callout.title || ""),
+            text: String(callout.text || ""),
+            action: String(callout.action || qsTr("Open")),
+            url: String(callout.url || "")
+        };
+    }
+
+    function markdownOf(version, title, date, callout, sections) {
         let out = "# Orchard " + version + "\n\n" + title + (date ? " (" + date + ")" : "") + "\n";
+        if (callout.title !== "")
+            out += "\n## " + callout.title + "\n" + callout.text + (callout.url ? "\n\n" + callout.url : "") + "\n";
         for (const section of sections)
             out += "\n## " + section.title + "\n" + section.items.map(line => "- " + line).join("\n") + "\n";
         return out;
@@ -117,6 +130,7 @@ Item {
             const version = String(release.version);
             const title = String(release.title || "");
             const date = root.dateLabel(release.date);
+            const callout = root.calloutOf(release.callout);
             out.push({
                 version: version,
                 title: title,
@@ -126,9 +140,10 @@ Item {
                 installed: version === installed,
                 isNew: i < fresh,
                 count: count,
+                callout: callout,
                 sections: sections,
-                markdown: root.markdownOf(version, title, date, sections),
-                haystack: (version + "\n" + title + "\n" + sections.map(s => s.title + "\n" + s.items.join("\n")).join("\n")).toLowerCase()
+                markdown: root.markdownOf(version, title, date, callout, sections),
+                haystack: (version + "\n" + title + "\n" + callout.title + "\n" + callout.text + "\n" + sections.map(s => s.title + "\n" + s.items.join("\n")).join("\n")).toLowerCase()
             });
         }
         return out;

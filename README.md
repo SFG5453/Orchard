@@ -11,6 +11,7 @@ Adaptive mixes · Best Mix queues · Synced lyrics · Lossless audio · Orchard 
     <a href="https://sfg545.dev/orchard"><img src="https://img.shields.io/badge/Download-Orchard-8A2BE2?style=flat-square" alt="Download Orchard"></a>
     <a href="#download"><img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20Android-informational?style=flat-square" alt="Windows, Linux, and Android"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--or--later-blue?style=flat-square" alt="AGPL-3.0-or-later license"></a>
+    <a href="https://discord.com/invite/bBSrkYu4yV"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Join the Orchard Discord"></a>
     <a href="https://ko-fi.com/sfg545"><img src="https://img.shields.io/badge/Support-Ko--fi-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
   </p>
 

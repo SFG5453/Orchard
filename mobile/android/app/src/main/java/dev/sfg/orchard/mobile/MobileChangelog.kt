@@ -21,17 +21,42 @@ package dev.sfg.orchard.mobile
 
 import dev.sfg.orchard.connect.BuildConfig
 
+const val DISCORD_INVITE_URL = "https://discord.com/invite/bBSrkYu4yV"
+
+/** Announcement shown above a release's notes. */
+data class ReleaseCallout(val title: String, val text: String, val action: String, val url: String)
+
 /** Bundled changelog and current release notes for Orchard Mobile. */
 object MobileChangelog {
     const val CURRENT_VERSION = BuildConfig.VERSION_NAME
     const val CURRENT_CODENAME = BuildConfig.CODENAME
 
+    val CURRENT_CALLOUT: ReleaseCallout? = ReleaseCallout(
+        title = "Orchard has a Discord",
+        text = "Follow Orchard 2.1 and Mobile v2 for Android and iOS, with a new base and Adaptive Mix v2, before release.",
+        action = "Join Discord",
+        url = DISCORD_INVITE_URL,
+    )
+
     val CURRENT_RELEASE_NOTES =
         """
+        ### Community
+
+        - **Orchard has a Discord**: Follow Orchard 2.1 and Mobile v2 for Android and iOS, with a new base and Adaptive Mix v2, before release. Join at https://discord.com/invite/bBSrkYu4yV or from Settings, About.
+        - **What's new after updates**: Release notes open once after an update.
+
+        ### Library
+
+        - **Local albums**: Local music groups into albums from file tags. Songs without an album artist group by folder, so compilations and CD subfolders stay whole.
+
+        ### Improved
+
+        - **YouTube playback**: A new native extractor reads the YouTube player faster with less memory.
+
         ### Fixes
 
-        - **Saved albums and playlists stay saved**: Saving an album or playlist while signed in adds it to your YouTube Music or Apple Music account library, so the next library refresh keeps it. Album and playlist pages show whether the collection is already saved to your account, and a failed save or removal is undone with a warning. Saves made without signing in stay on the phone.
-        - **Apple Music sign-in button**: Connecting Apple Music shows a sign-in button instead of opening Apple's authorization window immediately. A saved Apple session still connects without a prompt.
+        - **Playback recovery**: A song whose cached audio cannot be read is fetched again, and playback controls reconnect after the playback session ends.
+        - **Fewer duplicates**: Mixes and autoplay no longer queue both the album cut and its music video.
         """
             .trimIndent()
 }

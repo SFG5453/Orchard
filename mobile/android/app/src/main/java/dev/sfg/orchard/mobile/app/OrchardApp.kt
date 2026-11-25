@@ -100,6 +100,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val releaseNotesPending by viewModel.releaseNotes.pending.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val nonMusicSegment = viewModel.nonMusicSegment.collectAsStateWithLifecycle()
     val nonMusicSkip = remember(viewModel) {
@@ -346,6 +347,11 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     onInstall = viewModel::installUpdate,
                     onDismiss = viewModel::dismissUpdate,
                 )
+
+                // An offered update takes precedence; its own notes follow the install.
+                if (releaseNotesPending && !chromeHidden && updateState is dev.sfg.orchard.mobile.UpdateState.Idle) {
+                    dev.sfg.orchard.mobile.ui.components.ReleaseNotesDialog(onDismiss = viewModel.releaseNotes::dismiss)
+                }
 
                 dev.sfg.orchard.mobile.ui.components.NpuDialogHost(settings, viewModel::updateSettings)
             }

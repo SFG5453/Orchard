@@ -48,6 +48,7 @@ AboutSectionForm {
 
     releaseNotesButton.onClicked: root.releaseNotesRequested()
     orchardLinkButton.onClicked: Qt.openUrlExternally("https://sfg545.dev/orchard")
+    communityButton.onClicked: Qt.openUrlExternally("https://discord.com/invite/bBSrkYu4yV")
     orchardLicenseButton.onClicked: root.showLicenseModal(qsTr("Orchard License (AGPL-3.0)"), "orchard")
 
     licenseList.delegate: SettingsLicenseCard {

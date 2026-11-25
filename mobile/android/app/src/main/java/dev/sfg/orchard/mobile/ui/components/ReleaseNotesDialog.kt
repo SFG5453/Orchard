@@ -157,6 +157,7 @@ fun ReleaseNotesDialog(
     version: String = BuildConfig.VERSION_NAME,
     codename: String = BuildConfig.CODENAME,
     releaseNotes: String = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES,
+    callout: dev.sfg.orchard.mobile.ReleaseCallout? = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_CALLOUT,
     onDismiss: () -> Unit,
 ) {
     val sections = remember(releaseNotes) { parseReleaseNoteSections(releaseNotes) }
@@ -321,6 +322,10 @@ fun ReleaseNotesDialog(
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 ) {
+                    if (callout != null) {
+                        ReleaseCalloutCard(callout)
+                        Spacer(Modifier.height(10.dp))
+                    }
                     if (sections.isNotEmpty()) {
                         sections.forEachIndexed { index, section ->
                             if (index > 0) Spacer(Modifier.height(10.dp))

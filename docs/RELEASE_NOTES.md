@@ -8,7 +8,8 @@ embedded in the Orchard executable by `meson/release_notes.qrc`.
 For each release, add a new entry at the top of the JSON array with its `version`,
 `date` (`YYYY-MM-DD`), `title`, and `sections`. Each section has a `title` and an
 `items` array of short, user-facing changes. The `highlights` field is also
-supported. Match `version` to the Meson project version in `meson.build`; the window
+supported. An optional `callout` object with `title`, `text`, `action` (button
+label), and `url` shows an announcement card above the sections. Match `version` to the Meson project version in `meson.build`; the window
 marks that entry as installed. Keep published entries so people can read past
 notes offline.
 

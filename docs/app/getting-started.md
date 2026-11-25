@@ -55,7 +55,7 @@ Select the **Account and settings** button in the top bar at the top right of th
 - **Appearance**: player bar bitrate, animated artwork, and the immersive background. See [Appearance](appearance.md).
 - **Integrations**: Discord Rich Presence, Last.fm, Spotify Canvas, and Qobuz. Apple Music is under General. See [Integrations](integrations.md).
 - **Shortcuts**: the keyboard shortcut list. See [Keyboard shortcuts](shortcuts.md).
-- **About**: version, credits, and open source licenses.
+- **About**: version, credits, release notes, the Orchard Discord, and open source licenses.
 
 Close Settings with the **X** button in the corner, by pressing Esc, or by clicking outside the panel.
 

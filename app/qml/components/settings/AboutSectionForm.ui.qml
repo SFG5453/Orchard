@@ -27,6 +27,7 @@ ColumnLayout {
     id: root
 
     property alias orchardLinkButton: orchardLinkButton
+    property alias communityButton: communityButton
     property alias orchardLicenseButton: orchardLicenseButton
     property alias licenseList: licenseList
     property alias releaseNotesButton: releaseNotesButton
@@ -227,6 +228,17 @@ ColumnLayout {
             SettingsButton {
                 id: orchardLicenseButton
                 text: qsTr("License")
+            }
+        }
+
+        SettingsRow {
+            iconName: "message-circle"
+            title: qsTr("Community")
+            description: qsTr("Join the Orchard Discord for previews, help and release news.")
+
+            SettingsButton {
+                id: communityButton
+                text: qsTr("Join Discord")
             }
         }
     }

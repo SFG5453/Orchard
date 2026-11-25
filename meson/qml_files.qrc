@@ -47,6 +47,7 @@
     <file alias="app/qml/components/releases/ReleasesView.qml">../app/qml/components/releases/ReleasesView.qml</file>
     <file alias="app/qml/components/releases/ReleasesSidebar.qml">../app/qml/components/releases/ReleasesSidebar.qml</file>
     <file alias="app/qml/components/releases/ReleaseReader.qml">../app/qml/components/releases/ReleaseReader.qml</file>
+    <file alias="app/qml/components/releases/ReleaseCallout.qml">../app/qml/components/releases/ReleaseCallout.qml</file>
     <file alias="app/qml/components/releases/ReleaseChip.qml">../app/qml/components/releases/ReleaseChip.qml</file>
     <file alias="app/qml/components/support/SupportPopup.qml">../app/qml/components/support/SupportPopup.qml</file>
     <file alias="app/qml/components/support/SupportView.qml">../app/qml/components/support/SupportView.qml</file>

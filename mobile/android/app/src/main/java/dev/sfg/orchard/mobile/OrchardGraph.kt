@@ -227,6 +227,7 @@ class OrchardGraph(context: Context) {
     }
 
     val updates = UpdateManager(context) { settings.settings.value.betaChannelEnabled }
+    val releaseNotes = ReleaseNotesPrompt(context, settings, applicationScope)
 
     /** Orchard Connect; declared last because it reads the player, providers and settings above. */
     val connect = ConnectRepository(context, applicationScope, this)

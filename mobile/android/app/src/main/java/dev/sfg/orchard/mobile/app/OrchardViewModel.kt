@@ -248,6 +248,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private val accountLinks = AccountLinks(graph, viewModelScope) { showWarning(it) }
 
     val updateState: StateFlow<UpdateState> = graph.updates.state
+    val releaseNotes = graph.releaseNotes
 
     private val cache = CacheSizeTracker(application, graph, viewModelScope)
     val cacheSizeBytes: StateFlow<Long> = cache.sizeBytes

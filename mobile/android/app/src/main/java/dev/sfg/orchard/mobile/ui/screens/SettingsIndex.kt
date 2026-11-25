@@ -87,6 +87,7 @@ private val entries = listOf(
     SettingsEntry("Clear cache", "Free temporary audio and artwork", SettingsPage.Storage, "storage delete"),
     SettingsEntry("Check for updates", "Look for newer releases", SettingsPage.About, "version upgrade"),
     SettingsEntry("Release notes", "What changed in this version", SettingsPage.About, "changelog"),
+    SettingsEntry("Community", "Join the Orchard Discord", SettingsPage.About, "discord server chat help"),
     SettingsEntry("Beta channel", "Get beta builds from GitHub", SettingsPage.About),
     SettingsEntry("Skip non-music parts", "Talking intros, skits and applause", SettingsPage.Mixing, "sponsorblock intro skit"),
     SettingsEntry("AI-generated music", "Label or skip AI songs", SettingsPage.Mixing, "slop ai"),

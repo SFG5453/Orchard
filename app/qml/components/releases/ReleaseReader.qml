@@ -166,6 +166,14 @@ ColumnLayout {
                 width: Math.min(760, parent.width - 36 - 28)
                 spacing: 14
 
+                ReleaseCallout {
+                    Layout.fillWidth: true
+                    title: root.entry ? root.entry.callout.title : ""
+                    body: root.entry ? root.entry.callout.text : ""
+                    action: root.entry ? root.entry.callout.action : ""
+                    url: root.entry ? root.entry.callout.url : ""
+                }
+
                 Repeater {
                     model: root.entry ? root.entry.sections : []
 

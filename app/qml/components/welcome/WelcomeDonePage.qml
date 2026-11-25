@@ -60,4 +60,15 @@ WelcomePage {
             }
         }
     }
+
+    WelcomeRow {
+        title: qsTr("Community")
+        hint: qsTr("Join the Orchard Discord for previews and help.")
+
+        WelcomeButton {
+            compact: true
+            text: qsTr("Join Discord")
+            onClicked: Qt.openUrlExternally("https://discord.com/invite/bBSrkYu4yV")
+        }
+    }
 }

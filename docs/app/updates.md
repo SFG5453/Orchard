@@ -28,7 +28,9 @@ When installed with the Orchard installer, Orchard downloads updates in the back
 
 After an update, Orchard opens the **Release notes** window once to show what changed. Releases you have not opened yet are marked **New**.
 
-To read the notes again, open **Settings** > **About** > **Release Notes** and select **View release notes**. You can also press Ctrl+K (or /) and choose **Release notes**. The window lists every release on the left, newest first. The one you run is marked **Installed**. Select a release to read its changes, or use **Newer** and **Older** to move between releases. Type in the search box to find releases by version, title, or wording, for example "lyrics". Select **Copy notes** to copy a release as Markdown.
+To read the notes again, open **Settings** > **About** > **Release Notes** and select **View release notes**. You can also press Ctrl+K (or /) and choose **Release notes**. The window lists every release on the left, newest first. The one you run is marked **Installed**. Select a release to read its changes, or use **Newer** and **Older** to move between releases. Type in the search box to find releases by version, title, or wording, for example "lyrics". Select **Copy notes** to copy a release as Markdown. Some releases show an announcement card at the top with a button that opens a web page.
+
+Releases and previews are also announced on the Orchard Discord. To join, open **Settings** > **About** > **Community** and select **Join Discord**.
 
 The notes are included with Orchard, so you can read them offline. Settings > About still shows the version you are running in the Release Notes row.
 

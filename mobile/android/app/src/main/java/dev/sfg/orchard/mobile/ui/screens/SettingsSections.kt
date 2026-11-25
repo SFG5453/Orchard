@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -32,10 +33,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.connect.BuildConfig
+import dev.sfg.orchard.mobile.DISCORD_INVITE_URL
 import dev.sfg.orchard.mobile.MobileUpdateMetadata
 import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.model.OrchardSettings
@@ -151,6 +154,18 @@ internal fun AboutPage(
                 onChecked = { onSettings(settings.copy(betaChannelEnabled = it)) },
             )
         }
+    }
+
+    val uriHandler = LocalUriHandler.current
+    SectionLabel("Community", 3)
+    SettingsPanel(index = 4) {
+        ActionRow(
+            title = "Orchard Discord",
+            subtitle = "Previews, help and release news",
+            icon = Icons.Rounded.Groups,
+            // openUri throws when no app handles the link.
+            onClick = { runCatching { uriHandler.openUri(DISCORD_INVITE_URL) } },
+        )
     }
 }
 

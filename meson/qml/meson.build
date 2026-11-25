@@ -45,6 +45,7 @@ qml_sources = [
   'app/qml/components/releases/ReleasesView.qml',
   'app/qml/components/releases/ReleasesSidebar.qml',
   'app/qml/components/releases/ReleaseReader.qml',
+  'app/qml/components/releases/ReleaseCallout.qml',
   'app/qml/components/releases/ReleaseChip.qml',
   'app/qml/components/support/SupportPopup.qml',
   'app/qml/components/support/SupportView.qml',
