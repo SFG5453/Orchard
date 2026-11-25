@@ -85,9 +85,9 @@ android {
         applicationId = 'dev.sfg.orchard.mobile'
         minSdk = orchardMinSdk
         targetSdk = 36
-        versionCode = 20010
-        versionName = '2.0.0-beta.11'
-        buildConfigField 'String', 'CODENAME', '"Colostrum Arisen"'
+        versionCode = 20011
+        versionName = '2.0.0-beta.12'
+        buildConfigField 'String', 'CODENAME', '"Macros Reattempts"'
         // Only the build that is actually published may offer updates. Every other
         // build has its own applicationId, so the published APK is neither an
         // upgrade nor installable over it.

@@ -1,5 +1,30 @@
 [
   {
+    "version": "2.0.13-canary.1",
+    "date": "2026-11-25",
+    "title": "Orchard on Discord",
+    "callout": {
+      "title": "Orchard has a Discord",
+      "text": "Follow Orchard 2.1 and Mobile v2 for Android and iOS, with a new base and Adaptive Mix v2, before release.",
+      "action": "Join Discord",
+      "url": "https://discord.com/invite/bBSrkYu4yV"
+    },
+    "sections": [
+      {
+        "title": "Community",
+        "items": [
+          "Settings, About and the last page of the welcome tour link to the Orchard Discord."
+        ]
+      },
+      {
+        "title": "Fixes",
+        "items": [
+          "Discord Rich Presence is included in the macOS app. Fixes #285."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.12-canary.1",
     "date": "2026-11-23",
     "title": "Orchard on macOS",
