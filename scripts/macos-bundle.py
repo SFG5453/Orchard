@@ -21,6 +21,7 @@ from pathlib import Path
 p = argparse.ArgumentParser()
 p.add_argument("--executable", type=Path, required=True)
 p.add_argument("--helper", type=Path, action="append", default=[])
+p.add_argument("--library", type=Path, action="append", default=[])
 p.add_argument("--info-plist", type=Path, required=True)
 p.add_argument("--icon", type=Path, required=True)
 p.add_argument("--version", required=True)
@@ -117,7 +118,7 @@ if not a.distribution:
 
 build_dir = a.executable.parent
 origins = {}
-for source in [a.executable, *a.helper]:
+for source in [a.executable, *a.helper, *a.library]:
     if not source.exists():
         fail(f"missing {source}")
     shutil.copy2(source, macos / source.name)
@@ -142,6 +143,8 @@ if not license_file.is_file():
 shutil.copy2(root / "LICENSE", contents / "Resources/LICENSE")
 shutil.copy2(root / "THIRD_PARTY_NOTICES.md", contents / "Resources/THIRD_PARTY_NOTICES.md")
 shutil.copy2(license_file, contents / "Resources/FFmpeg-LICENSE.txt")
+shutil.copy2(root / "vendor/discord_social_sdk/License-Notices.txt",
+             contents / "Resources/DiscordSocialSdk-Notices.txt")
 # Contents/MacOS is sealed as code, so data lives in Resources.
 if (build_dir / "models").is_dir():
     shutil.copytree(build_dir / "models", contents / "Resources/models", symlinks=True)

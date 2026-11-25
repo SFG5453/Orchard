@@ -92,6 +92,8 @@ if host_machine.system() == 'windows'
     output: 'discord_partner_sdk.dll', copy: true)
 elif host_machine.system() == 'darwin'
   discord_sdk_libdir = discord_sdk_root / 'lib/macos'
+  configure_file(input: discord_sdk_libdir / 'libdiscord_partner_sdk.dylib',
+    output: 'libdiscord_partner_sdk.dylib', copy: true)
 else
   discord_sdk_libdir = discord_sdk_root / 'lib/linux'
   configure_file(input: discord_sdk_libdir / 'libdiscord_partner_sdk.so',
@@ -570,12 +572,13 @@ endif
 # A distribution bundle ships Qt inside the app and signs with the hardened runtime.
 macos_profile = get_option('macos_provisioning_profile')
 if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribution)
-  macos_bundle_inputs = [orchard, auth_helper, widevine_host, adaptive_stage,
+  macos_bundle_inputs = [orchard, auth_helper, widevine_host, discord_module, adaptive_stage,
     files('packaging/macos/Info.plist.in')]
   macos_bundle_args = [
     '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
+    '--library', '@INPUT3@', '--library', meson.current_build_dir() / 'libdiscord_partner_sdk.dylib',
     '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
-    '--info-plist', '@INPUT4@', '--icon', files('packaging/macos/Orchard.icns'),
+    '--info-plist', '@INPUT5@', '--icon', files('packaging/macos/Orchard.icns'),
     '--version', meson.project_version(), '--min-macos', macos_min,
     '--identity', get_option('macos_codesign_identity'),
     '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
@@ -587,7 +590,7 @@ if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribut
       '--entitlements', files('packaging/macos/Orchard.entitlements')]
   else
     macos_bundle_inputs += files(macos_profile)
-    macos_bundle_args += ['--profile', '@INPUT5@']
+    macos_bundle_args += ['--profile', '@INPUT6@']
   endif
   custom_target('Orchard.app',
     input: macos_bundle_inputs,
