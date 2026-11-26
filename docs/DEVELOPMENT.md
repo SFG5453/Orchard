@@ -122,7 +122,7 @@ Desktop Adaptive mix requires FFmpeg on PATH. Nirovi beat inference runs on a We
 
 Run the [desktop release workflow](../.github/workflows/manual-desktop-build.yml) from **Actions → Build and publish desktop release → Run workflow**. Choose `canary` or `stable` for a release. Enable **Build and upload artifacts without publishing to R2** to check a build without publishing; the channel selection has no effect on a build-only run.
 
-Linux and Windows each build Orchard and its native bootstrapper. Linux also produces an AppImage, the Arch job produces a native package, and Windows produces a portable `.7z` and an NSIS setup executable. The workflow uploads the builds as artifacts. For release runs, the packaging trees and installers pass to an Ubuntu 24.04 publish job.
+Linux and Windows each build Orchard and its native bootstrapper. The Linux job runs in a Debian 13 container; packaging fails if the bundle needs more than glibc 2.39 or GLIBCXX 3.4.33, so it keeps running on Ubuntu 24.04. Linux also produces an AppImage, the Arch job produces a native package, and Windows produces a portable `.7z` and an NSIS setup executable. The workflow uploads the builds as artifacts. For release runs, the packaging trees and installers pass to an Ubuntu 24.04 publish job.
 
 The publish job signs both manifests and the channel file, uploads immutable content objects, manifests, and versioned installer and portable downloads to the US jurisdiction R2 bucket, then updates `releases/<channel>.json` last.
 

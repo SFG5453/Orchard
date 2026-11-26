@@ -86,6 +86,9 @@ gio_tls="$(pkg-config --variable=giomoduledir gio-2.0)/libgiognutls.so"
 test -f "$gio_tls"
 pixbuf_dir="$(pkg-config --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0)"
 pixbuf_query="$(pkg-config --variable=gdk_pixbuf_query_loaders gdk-pixbuf-2.0)"
+# linuxdeploy excludes libgpg-error, but libgcrypt needs the version it was built with.
+gpg_error="$(pkg-config --variable=libdir gpg-error)/libgpg-error.so.0"
+test -f "$gpg_error"
 test -d "$pixbuf_dir"
 test -x "$pixbuf_query"
 pixbuf_loaders=("$pixbuf_dir"/*.so)
@@ -96,7 +99,7 @@ done
 
 ./linuxdeploy-x86_64.AppImage --appdir "$appdir" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
-  -l "$gio_tls" "${pixbuf_args[@]}" \
+  -l "$gio_tls" -l "$gpg_error" "${pixbuf_args[@]}" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
@@ -105,6 +108,7 @@ test -f "$appdir/usr/bin/ffprobe"
 test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
 test -f "$appdir/usr/lib/libgdk_pixbuf-2.0.so.0"
 test -f "$appdir/usr/lib/librsvg-2.so.2"
+test -f "$appdir/usr/lib/libgpg-error.so.0"
 compgen -G "$appdir/usr/lib/libwebkit2gtk-4.1.so*" > /dev/null
 compgen -G "$appdir/usr/lib/libjavascriptcoregtk-4.1.so*" > /dev/null
 dependencies="$(LD_LIBRARY_PATH="$appdir/usr/lib" ldd "$appdir/usr/bin/orchard-auth-helper" 2>&1)" || {
@@ -149,6 +153,18 @@ python3 "$source_dir/scripts/stage-webkit-appimage.py" "$appdir"
 mkdir -p "$appdir/usr/share/glib-2.0"
 cp -a /usr/share/glib-2.0/schemas "$appdir/usr/share/glib-2.0/"
 glib-compile-schemas "$appdir/usr/share/glib-2.0/schemas"
+
+# Ubuntu 24.04 is the oldest supported host: glibc 2.39, GLIBCXX 3.4.33.
+required="$(find "$appdir" -type f -exec sh -c 'objdump -p "$@" 2>/dev/null || true' _ {} + |
+  grep -oE '\bGLIBC(XX)?_[0-9][0-9.]*' | sort -Vu)"
+for limit in GLIBC_2.39 GLIBCXX_3.4.33; do
+  newest="$(grep "^${limit%%_*}_" <<< "$required" | tail -n 1)"
+  echo "Newest required ${limit%%_*}: $newest"
+  if [[ "$(printf '%s\n' "$newest" "$limit" | sort -V | tail -n 1)" != "$limit" ]]; then
+    echo "The bundle needs $newest, above the $limit limit" >&2
+    exit 1
+  fi
+done
 
 ./linuxdeploy-x86_64.AppImage --appdir "$appdir" --output appimage
 mapfile -t images < <(find "$output_dir" -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy*' -print)

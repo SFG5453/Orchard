@@ -29,6 +29,7 @@ jobs:
     name: Linux x86_64 app and bootstrapper
     if: ${{ inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ubuntu-24.04
+    container: debian:13
     timeout-minutes: 360
     env:
       CC: clang
@@ -42,16 +43,28 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       LDFLAGS: -fuse-ld=mold
     steps:
+      - name: Install build tools
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl desktop-file-utils file git \
+            python3 python3-dev python3-venv rustup xz-utils zstd \
+            cmake ninja-build pkg-config clang mold ccache libclang-dev \
+            libsecret-1-dev libwebkit2gtk-4.1-dev glib-networking libgl1-mesa-dev libegl-dev libvulkan-dev ffmpeg \
+            libgdk-pixbuf-2.0-dev libgdk-pixbuf2.0-bin librsvg2-common \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
+            libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 \
+            libxkbcommon-dev libxkbcommon-x11-dev libxkbcommon-x11-0
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Restore Apple Music logo
         env:
           APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
-        run: python scripts/restore-apple-music-logo.py
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
+        run: python3 scripts/restore-apple-music-logo.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -59,22 +72,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-linux-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-linux-debian13-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            orchard-linux-clang-mold-qt6120-v1-
-      - name: Install build tools
+            orchard-linux-debian13-clang-mold-qt6120-v1-
+      - name: Install Python and Rust tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake ninja-build pkg-config clang mold ccache libclang-dev \
-            libsecret-1-dev libwebkit2gtk-4.1-dev glib-networking libfuse2t64 libgl1-mesa-dev libvulkan-dev ffmpeg \
-            libgdk-pixbuf-2.0-dev libgdk-pixbuf2.0-bin librsvg2-common \
-            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
-            libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 \
-            libxkbcommon-dev libxkbcommon-x11-dev libxkbcommon-x11-0
-          python -m pip install 'meson>=1.12,<2' cryptography 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
-          rustup update stable
+          python3 -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install 'meson>=1.12,<2' cryptography 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          rustup default stable
       - name: Prepare Linux compiler cache
         id: ccache-setup
         run: |
@@ -123,11 +129,11 @@ jobs:
         run: |
           bash scripts/package-linux-appimage.sh build/desktop "$QT_ROOT" "$RUNNER_TEMP/orchard-linux"
           cp build/bootstrapper/orchard-bootstrapper "$RUNNER_TEMP/orchard-linux/orchard-bootstrapper"
-          tar -C "$RUNNER_TEMP/orchard-linux" -cf "$RUNNER_TEMP/orchard-linux-publish.tar" AppDir Orchard-Linux-x86_64.AppImage orchard-bootstrapper
+          tar -C "$RUNNER_TEMP/orchard-linux" -cf "$GITHUB_WORKSPACE/orchard-linux-publish.tar" AppDir Orchard-Linux-x86_64.AppImage orchard-bootstrapper
       - uses: actions/upload-artifact@v4
         with:
           name: orchard-linux-publish
-          path: ${{ runner.temp }}/orchard-linux-publish.tar
+          path: orchard-linux-publish.tar
           if-no-files-found: error
           retention-days: 14
       - name: Linux compiler cache stats
@@ -138,7 +144,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-linux-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-linux-debian13-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
   arch:
     name: Arch Linux x86_64 package
