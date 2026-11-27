@@ -263,6 +263,13 @@ export class ConnectHub {
       socket.close(4401, "invalid_token");
       return;
     }
+    // Same rule as the upgrade: a signed-out device keeps no hub session, even with an unexpired token.
+    const device = await this.env.DB.prepare("SELECT id FROM devices WHERE id = ? AND user_id = ?")
+      .bind(claims.did, claims.sub).first();
+    if (!device) {
+      socket.close(4401, "device_revoked");
+      return;
+    }
     socket.serializeAttachment({ ...state, expiresAt: claims.exp });
   }
 

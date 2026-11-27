@@ -4,5 +4,5 @@
   "private": true,
   "description": "Orchard controls for Stream Deck, OpenDeck and Tacto",
   "license": "AGPL-3.0-or-later",
-  "dependencies": { "ws": "8.18.3" }
+  "dependencies": { "ws": "8.23.0" }
 }

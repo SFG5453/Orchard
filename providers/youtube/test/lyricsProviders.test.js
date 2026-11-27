@@ -6,14 +6,33 @@ const track = { id: 'abcdefghijk', title: 'Song', artist: 'Artist', album: 'Albu
 const ttml = '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="3s">Found lyrics</p></div></body></tt>';
 const ready = (source) => ({ status: 'ready', mode: 'unsynced', lines: [{ text: source }], source });
 
-test('custom order uses the first successful provider and never calls disabled providers', async () => {
+const synced = (source) => ({ status: 'ready', mode: 'synced', lines: [{ text: source, startTime: 1 }], source });
+
+test('custom order stops at the first synced provider and never calls disabled providers', async () => {
   const called = [];
   const result = await resolveLyricsChain(async (_, provider) => {
     called.push(provider);
-    return ready(provider);
+    return synced(provider);
   }, track, ['betterlyrics', 'lrclib']);
   assert.deepEqual(called, ['betterlyrics']);
   assert.equal(result.source, 'betterlyrics');
+});
+
+test('plain lyrics keep looking for a synced copy further down the chain', async () => {
+  const called = [];
+  const result = await resolveLyricsChain(async (_, provider) => {
+    called.push(provider);
+    return provider === 'apple' ? synced(provider) : ready(provider);
+  }, track, ['lrclib', 'youtube', 'apple']);
+  assert.deepEqual(called, ['lrclib', 'youtube', 'apple']);
+  assert.equal(result.source, 'apple');
+  assert.equal(result.mode, 'synced');
+});
+
+test('without any synced copy the first plain result still wins', async () => {
+  const result = await resolveLyricsChain(async (_, provider) => ready(provider), track, ['lrclib', 'youtube']);
+  assert.equal(result.source, 'lrclib');
+  assert.equal(result.mode, 'unsynced');
 });
 
 test('failures and unavailable results fall through in configured order', async () => {

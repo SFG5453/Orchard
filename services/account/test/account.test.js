@@ -308,3 +308,14 @@ describe("maintenance", () => {
     assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM auth_codes").get().n, 0);
   });
 });
+
+describe("access token parsing", () => {
+  it("treats malformed segments as invalid tokens", async () => {
+    const { privateKey } = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+    const key = JSON.stringify({ ...(await crypto.subtle.exportKey("jwk", privateKey)), kid: "k" });
+    const nullSegment = Buffer.from("null").toString("base64url");
+    for (const token of ["a.b.%%%", `${nullSegment}.${nullSegment}.AAAA`, "e30.e30.@@"]) {
+      assert.equal(await verifyJwt(token, key), null);
+    }
+  });
+});

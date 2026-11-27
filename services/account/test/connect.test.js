@@ -295,3 +295,46 @@ describe("Connect hub route", () => {
     assert.equal(forwarded.request.headers.get("x-orchard-user"), "user-1");
   });
 });
+
+describe("Connect hub token refresh", () => {
+  let env;
+  let hub;
+
+  beforeEach(async () => {
+    const { privateKey } = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+    const jwk = { ...(await crypto.subtle.exportKey("jwk", privateKey)), kid: "test-key" };
+    env = { DB: createD1(), PUBLIC_URL: "https://account.test", SIGNING_KEY: JSON.stringify(jwk) };
+    const t = now();
+    env.DB.raw.exec(`INSERT INTO users (id, email, name, picture, created_at, updated_at) VALUES ('user-1', '', '', '', ${t}, ${t})`);
+    env.DB.raw.exec(`INSERT INTO devices (id, user_id, name, platform, refresh_hash, rotated_at, created_at, last_seen_at)
+      VALUES ('device-1', 'user-1', 'PC', 'linux', 'hash', ${t}, ${t}, ${t})`);
+    hub = new ConnectHub(new FakeCtx(), env);
+  });
+
+  async function freshToken() {
+    const t = now();
+    return signJwt({ iss: "https://account.test", aud: "orchard", sub: "user-1", did: "device-1", iat: t, exp: t + 900 },
+      env.SIGNING_KEY);
+  }
+
+  it("extends a live device and closes one that was signed out", async () => {
+    const socket = new FakeSocket();
+    hub.accept(socket, { userId: "user-1", deviceId: "device-1", expiresAt: now() + 10 });
+    const token = await freshToken();
+    await hub.webSocketMessage(socket, JSON.stringify({ type: "refresh", token }));
+    assert.equal(socket.closed, null);
+    assert.ok(socket.deserializeAttachment().expiresAt > now() + 10);
+
+    env.DB.raw.exec("DELETE FROM devices WHERE id = 'device-1'");
+    await hub.webSocketMessage(socket, JSON.stringify({ type: "refresh", token }));
+    assert.deepEqual(socket.closed, { code: 4401, reason: "device_revoked" });
+  });
+
+  it("closes on a garbled token instead of throwing", async () => {
+    const socket = new FakeSocket();
+    hub.accept(socket, { userId: "user-1", deviceId: "device-1", expiresAt: now() + 900 });
+    const [header, body] = (await freshToken()).split(".");
+    await hub.webSocketMessage(socket, JSON.stringify({ type: "refresh", token: `${header}.${body}.%%%` }));
+    assert.deepEqual(socket.closed, { code: 4401, reason: "invalid_token" });
+  });
+});

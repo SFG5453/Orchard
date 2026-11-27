@@ -63,8 +63,50 @@ function lyricsMetadata(track = {}) {
   };
 }
 
-function lyricsQuery(track = {}) {
-  const metadata = lyricsMetadata(track);
+const featuringPart = /\s*[([]\s*(?:feat\.?|ft\.?|featuring|with)\s[^)\]]*[)\]]/gi;
+const featuringTail = /\s+(?:feat\.?|ft\.?|featuring)\s.+$/i;
+const versionTail = /\s+-\s+(?:(?:\d{4}\s+)?remaster(?:ed)?(?:\s+\d{4})?(?:\s+version)?|radio edit|single version|album version|mono|stereo)\s*$/i;
+const artistSeparator = /\s*[,&、]\s*|\s+(?:x|feat\.?|ft\.?|featuring|with)\s+/i;
+
+function bareTitle(title) {
+  return title.replace(featuringPart, '').replace(featuringTail, '').replace(versionTail, '').replace(/\s+/g, ' ').trim();
+}
+
+function primaryArtist(track, fallback) {
+  const listed = (Array.isArray(track.artists) ? track.artists : [])
+    .map((artist) => lyricsLookupText(typeof artist === 'string' ? artist : artist?.name))
+    .find(Boolean);
+  return listed || fallback.split(artistSeparator)[0].trim() || fallback;
+}
+
+// The catalog's exact strings first; then the bare song for databases that file
+// "Song (feat. Guest)" as "Song" by its lead artist, and "Song - 2011 Remaster" as "Song".
+export function lyricsLookups(track = {}) {
+  const exact = lyricsMetadata(track);
+  if (!exact) return [];
+  const bare = { ...exact, title: bareTitle(exact.title) || exact.title, artist: primaryArtist(track, exact.artist) };
+  const key = (item) => `${item.title}\u001f${item.artist}`.toLowerCase();
+  return key(bare) === key(exact) ? [exact] : [exact, bare];
+}
+
+// First synced answer across lookups, else the first plain one.
+async function firstLyrics(lookups, resolveOne) {
+  let plain = null;
+  for (const metadata of lookups) {
+    let result = null;
+    try {
+      result = await resolveOne(metadata);
+    } catch {
+      // A failed lookup lets the next spelling try.
+    }
+    if (result?.status !== 'ready' || !(result.lines?.length > 0)) continue;
+    if (result.mode === 'synced') return result;
+    plain ||= result;
+  }
+  return plain;
+}
+
+function lyricsQuery(metadata) {
   if (!metadata) return null;
 
   return {
@@ -180,26 +222,59 @@ function normalizeLyricsResult(result) {
   return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
 }
 
+// LRCLIB's own get endpoint accepts ±2 s; a little more covers rounding in catalog clocks.
+const lrclibDurationToleranceSeconds = 3;
+
+// Search returns every cut of a song (album, radio edit, live). Timings only fit the one
+// whose length matches; other cuts can still lend their words, untimed.
+export function pickLrclibResult(results, durationSeconds) {
+  const candidates = (Array.isArray(results) ? results : [])
+    .filter((item) => item && (item.syncedLyrics || item.plainLyrics || item.instrumental));
+  if (!(durationSeconds > 0)) return candidates.find((item) => item.syncedLyrics) || candidates[0] || null;
+
+  const gap = (item) => Math.abs(Number(item.duration) - durationSeconds);
+  const matching = candidates
+    .filter((item) => Number(item.duration) > 0 && gap(item) <= lrclibDurationToleranceSeconds)
+    .sort((left, right) => gap(left) - gap(right));
+  const timed = matching.find((item) => item.syncedLyrics);
+  if (timed || matching.length) return timed || matching[0];
+
+  const other = candidates[0];
+  if (!other) return null;
+  const plainLyrics = other.plainLyrics ||
+    (parseLocalLyrics(other.syncedLyrics || '').synced || []).map((line) => line.text).join('\n');
+  return { ...other, syncedLyrics: null, plainLyrics };
+}
+
 async function resolveLrclibLyrics(track = {}) {
-  const query = lyricsQuery(track);
+  return await firstLyrics(lyricsLookups(track), resolveLrclibLookup) ||
+    { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
+}
+
+async function resolveLrclibLookup(metadata) {
+  const query = lyricsQuery(metadata);
   if (!query) return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
 
   const duration = query.duration ? query.duration / 1000 : undefined;
+  let exact = null;
   try {
-    return normalizeLyricsResult(await lrclibRequest('get', { ...query, duration }));
+    exact = await lrclibRequest('get', { ...query, duration });
+    // An exact match with timings (or a known instrumental) needs no search.
+    if (exact?.syncedLyrics || exact?.instrumental) return normalizeLyricsResult(exact);
   } catch {
-    try {
-      const search = await lrclibRequest('search', {
-        track_name: query.track_name,
-        artist_name: query.artist_name,
-        duration
-      });
-      const firstWithLyrics = (Array.isArray(search) ? search : [])
-        .find((item) => item.syncedLyrics || item.plainLyrics || item.instrumental);
-      return normalizeLyricsResult(firstWithLyrics);
-    } catch {
-      return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
-    }
+    // 404 for no exact match; search below.
+  }
+
+  try {
+    const search = await lrclibRequest('search', {
+      track_name: query.track_name,
+      artist_name: query.artist_name
+    });
+    const picked = pickLrclibResult(search, duration);
+    if (picked?.syncedLyrics) return normalizeLyricsResult(picked);
+    return normalizeLyricsResult(exact?.plainLyrics ? exact : picked);
+  } catch {
+    return normalizeLyricsResult(exact);
   }
 }
 
@@ -242,20 +317,14 @@ export function createLyricsResolver({ loadYouTubeLyricsText, appleTtml = '' }) 
       }
       return { status: 'unavailable', mode: '', lines: [], source: 'apple' };
     }
-    const metadata = lyricsMetadata(track);
-    if (metadata) {
-      try {
-        let lines = [];
-        if (provider === 'bini') lines = await resolveBiniLyrics(metadata);
-        else if (provider === 'betterlyrics')
-          lines = await resolveBetterLyrics(metadata, { fetchWithTimeout, parseTtml: parseAmLyricsTtml });
-        else if (provider === 'lyricsplus') lines = await resolveLyricsPlusLyrics(metadata);
-        return normalizeAmLyricsLines(lines || [], provider);
-      } catch {
-        // A failed provider lets the configured chain continue.
-      }
-    }
-    return { status: 'unavailable', mode: '', lines: [], source: provider };
+    const mirror = {
+      bini: (metadata) => resolveBiniLyrics(metadata),
+      betterlyrics: (metadata) => resolveBetterLyrics(metadata, { fetchWithTimeout, parseTtml: parseAmLyricsTtml }),
+      lyricsplus: (metadata) => resolveLyricsPlusLyrics(metadata)
+    }[provider];
+    const found = mirror && await firstLyrics(lyricsLookups(track),
+      async (metadata) => normalizeAmLyricsLines(await mirror(metadata) || [], provider));
+    return found || { status: 'unavailable', mode: '', lines: [], source: provider };
   };
 }
 
@@ -263,13 +332,18 @@ export const lyricsProviders = Object.freeze(['bini', 'betterlyrics', 'lyricsplu
 
 export async function resolveLyricsChain(resolveLyrics, track = {}, providers = lyricsProviders) {
   const order = Array.isArray(providers) ? [...new Set(providers)].filter((id) => lyricsProviders.includes(id)) : lyricsProviders;
+  // Plain text from an early provider must not hide timed lyrics from a later one;
+  // it is kept only as the answer when nobody further down has them synced.
+  let plain = null;
   for (const provider of order) {
     try {
       const data = await resolveLyrics(track, provider);
-      if (data?.status === 'ready' && data.lines?.length > 0) return data;
+      if (data?.status !== 'ready' || !(data.lines?.length > 0)) continue;
+      if (data.mode === 'synced') return data;
+      plain ||= data;
     } catch {
       // A provider failure is handled the same as an unavailable result.
     }
   }
-  return { status: 'unavailable', mode: '', lines: [], source: '' };
+  return plain || { status: 'unavailable', mode: '', lines: [], source: '' };
 }

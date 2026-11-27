@@ -244,10 +244,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           arch: amd64
-      - uses: msys2/setup-msys2@v2
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         id: ffmpeg-msys2
         with:
           msystem: MINGW64

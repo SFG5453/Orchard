@@ -36,6 +36,9 @@ export default {
       return jsonResponse({ ok: true, service: 'orchard-lastfm' });
     }
     if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed.' }, 405);
+    if (!(await withinRateLimit(env, request))) {
+      return jsonResponse({ error: 'Too many Last.fm requests. Try again in a minute.' }, 429, { 'retry-after': '60' });
+    }
     if (!env.LASTFM_API_KEY || !env.LASTFM_SHARED_SECRET) {
       return jsonResponse({ error: 'Last.fm scrobbling is not configured yet.' }, 503);
     }
@@ -236,6 +239,15 @@ function requestError(message, status) {
   return Object.assign(new Error(message), { status });
 }
 
-function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: responseHeaders });
+// Every caller spends Orchard's API key, and Last.fm throttles per key (error 29),
+// so one noisy client could stall scrobbling for everyone. Per IP, when bound.
+export async function withinRateLimit(env, request) {
+  if (!env.LASTFM_LIMITER) return true;
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const { success } = await env.LASTFM_LIMITER.limit({ key: ip });
+  return success;
+}
+
+function jsonResponse(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), { status, headers: { ...responseHeaders, ...headers } });
 }
