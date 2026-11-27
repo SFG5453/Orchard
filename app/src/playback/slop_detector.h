@@ -92,7 +92,7 @@ private:
     float nextCheck{0.0f};
     quint64 lastFeed{0};
   };
-  void finish(const QString &trackId);
+  void finish(const QString trackId);
   void record(const QString &trackId, const SlopVerdict &verdict);
   // Stored probability, or -1 when the track has no verdict.
   float lookup(const QString &trackId) const;

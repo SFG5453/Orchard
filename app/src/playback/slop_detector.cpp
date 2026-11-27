@@ -312,7 +312,7 @@ void SlopDetector::feed(const QString &trackId, const QAudioBuffer &buffer) {
     record(trackId, *verdict);
 }
 
-void SlopDetector::finish(const QString &trackId) {
+void SlopDetector::finish(const QString trackId) {
   const auto it = m_sessions.find(trackId);
   if (it == m_sessions.end())
     return;
