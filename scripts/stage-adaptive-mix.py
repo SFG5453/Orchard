@@ -60,10 +60,6 @@ elif a.platform.startswith("macos-"):
     ], check=True)
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
-if user_ort and a.platform.startswith("macos"):
-    # The worker finds libonnxruntime beside itself; editing the load commands voids its signature.
-    subprocess.run(["install_name_tool", "-add_rpath", "@loader_path", str(a.destination / worker)], check=True)
-    subprocess.run(["codesign", "--force", "--sign", "-", str(a.destination / worker)], check=True)
 # Stage only the validated runtime graphs and their documentation/licenses.
 for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.ort", "nirovi/README.md",
                  "syvenu/syvenu.ort", "syvenu/README.md", "syvenu/TRAINING_CREDITS.tsv.gz",

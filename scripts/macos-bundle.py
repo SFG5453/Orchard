@@ -68,6 +68,18 @@ def rpath_libraries(path):
     return [name for name in linked_libraries(path) if name.startswith("@rpath/")]
 
 
+def verify_mix_worker(macos):
+    worker = macos / "orchard-adaptive-mix"
+    if not worker.is_file():
+        fail(f"missing {worker}")
+    paths = rpaths(worker)
+    for dependency in rpath_libraries(worker):
+        name = dependency.removeprefix("@rpath/")
+        if name == "libwebgpu_dawn.dylib" or name.startswith("libonnxruntime."):
+            if "@loader_path" not in paths or not (macos / name).is_file():
+                fail(f"{worker.name} cannot load bundled dependency {dependency}")
+
+
 if a.distribution:
     if not (a.macdeployqt and a.entitlements):
         fail("--distribution needs --macdeployqt and --entitlements")
@@ -199,6 +211,7 @@ def sign_distribution():
         run("codesign", *flags, str(framework))
     run("codesign", *flags, "--entitlements", str(a.entitlements), str(app))
     run("codesign", "--verify", "--strict", "--deep", str(app))
+    verify_mix_worker(macos)
     for path in machos:
         for name in linked_libraries(path):
             if not name.startswith(("@", "/usr/lib/", "/System/")):

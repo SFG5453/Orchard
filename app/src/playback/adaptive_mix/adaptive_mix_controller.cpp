@@ -32,6 +32,7 @@ void AdaptiveMixController::setMode(const QString &mode) {
   emit modeChanged();
 }
 void AdaptiveMixController::setAvailable(bool available) {
+  available = available && m_workerInstalled;
   if (m_available == available)
     return;
   clear();

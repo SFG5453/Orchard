@@ -81,12 +81,25 @@ private slots:
     pipeline.setPlaying(true);
     if (pipeline.m_sink->error() != QtAudio::NoError)
       QSKIP("No usable audio output on this machine");
-    const auto *device = pipeline.m_sinkDevice;
+    const auto *device = pipeline.m_sinkDevice.data();
     const int failures = OutputHealth::sinkFailures;
     pipeline.onSinkStateChanged(QtAudio::StoppedState);
     QCOMPARE(pipeline.m_sinkDevice, device);
     QCOMPARE(int(OutputHealth::sinkFailures), failures);
     QVERIFY(!pipeline.m_sinkRetryTimer.isActive());
+  }
+
+  void flushingPausedPlaybackReleasesTheWriterUntilPlaybackResumes() {
+    AudioPipeline pipeline;
+    pipeline.setPlaying(true);
+    if (!pipeline.m_sinkDevice)
+      QSKIP("No usable audio output on this machine");
+    pipeline.setPlaying(false);
+    pipeline.flush();
+    QVERIFY(!pipeline.m_sinkDevice);
+    QCOMPARE(pipeline.m_sink->state(), QtAudio::StoppedState);
+    pipeline.setPlaying(true);
+    QVERIFY(pipeline.m_sinkDevice);
   }
 };
 

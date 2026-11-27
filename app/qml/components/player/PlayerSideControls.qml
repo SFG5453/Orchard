@@ -36,6 +36,24 @@ RowLayout {
 
     onUseVolumePopupChanged: if (!useVolumePopup) volumePopup.close()
 
+    LucideIcon {
+        id: adaptiveMixIndicator
+        readonly property var mix: OrchardPlayback.adaptiveMix
+        visible: !OrchardConnect.controlling && Boolean(OrchardPlayback.track.id)
+                 && OrchardPlayback.crossfadeEnabled && mix.requested
+        name: "sparkles"
+        implicitWidth: 16
+        implicitHeight: 16
+        color: mix.ready ? bar.accentColor : bar.secondaryText
+        Accessible.role: Accessible.StaticText
+        Accessible.name: ToolTip.text
+        ToolTip.visible: mixHover.hovered
+        ToolTip.delay: 500
+        ToolTip.text: !mix.available ? qsTr("Adaptive mix unavailable")
+                                     : mix.status || qsTr("Adaptive mix enabled · waiting to prepare the next track")
+        HoverHandler { id: mixHover }
+    }
+
     Button {
         id: videoButton
 

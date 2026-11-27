@@ -29,6 +29,7 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QPointer>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -142,7 +143,7 @@ private:
   QAudioFormat m_format;
   QAudioDevice m_device;
   std::unique_ptr<QAudioSink> m_sink;
-  QIODevice *m_sinkDevice{nullptr};
+  QPointer<QIODevice> m_sinkDevice;
   QByteArray m_pending;
   bool m_primed{false};
   bool m_playing{false};

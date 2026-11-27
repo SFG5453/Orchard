@@ -3,7 +3,7 @@
 #include "model_paths.h"
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QProcess>
 #include <utility>
@@ -22,7 +22,10 @@ QString program() {
 }
 } // namespace
 
-bool AdaptiveMixWorker::installed() { return QFile::exists(program()); }
+bool AdaptiveMixWorker::installed() {
+  const QFileInfo worker(program());
+  return worker.isFile() && worker.isExecutable();
+}
 
 AdaptiveMixWorker::AdaptiveMixWorker(QObject *parent) : QObject(parent) {
   m_timeout.setSingleShot(true);

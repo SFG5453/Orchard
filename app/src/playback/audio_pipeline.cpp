@@ -24,7 +24,6 @@
 #include <QAudioSink>
 #include <QDebug>
 #include <QIODevice>
-#include <QMediaPlayer>
 
 #include <algorithm>
 #include <cmath>
@@ -52,8 +51,10 @@ AudioPipeline::AudioPipeline(QObject *parent) : QObject(parent), m_format(format
 }
 
 AudioPipeline::~AudioPipeline() {
-  if (m_sink)
-    m_sink->stop();
+  if (m_sink) {
+    m_sink->disconnect(this);
+    m_sink->reset();
+  }
   orchard_audio_engine_destroy(m_crossfadeEngine);
   orchard_audio_engine_destroy(m_engine);
 }
@@ -142,13 +143,16 @@ void AudioPipeline::setDevice(const QAudioDevice &device) {
 }
 
 void AudioPipeline::ensureSink() {
-  if (!m_sink)
+  if (!m_sink && m_playing)
     rebuildSink();
 }
 
 void AudioPipeline::rebuildSink() {
-  if (m_sink)
-    m_sink->stop();
+  if (m_sink) {
+    m_sinkDevice.clear();
+    m_sink->disconnect(this);
+    m_sink->reset();
+  }
   m_pending.clear();
   // A null device makes Qt pick the system default.
   m_sink = std::make_unique<QAudioSink>(m_device, m_format);
@@ -158,7 +162,8 @@ void AudioPipeline::rebuildSink() {
   OutputHealth::sinkBufferMs = int(m_sink->bufferSize() / kFrameBytes * 1000 / kSampleRate);
   m_primed = false;
   m_sink->setVolume(m_masterVolume);
-  startSink();
+  if (m_playing)
+    startSink();
 }
 
 void AudioPipeline::startSink() {
@@ -204,11 +209,7 @@ void AudioPipeline::onSinkStateChanged(QtAudio::State state) {
     m_underrunStartMs = -1;
     return;
   }
-  // Idle while the player still plays means the sink ran dry; a drained
-  // queue at end of media is expected.
-  if (!m_primed || !m_currentPlayer ||
-      m_currentPlayer->playbackState() != QMediaPlayer::PlayingState ||
-      m_currentPlayer->mediaStatus() == QMediaPlayer::EndOfMedia)
+  if (!m_primed || !m_currentPlayer || !m_playing)
     return;
   m_underrunStartMs = now;
   ++OutputHealth::underruns;
@@ -228,9 +229,10 @@ void AudioPipeline::flush() {
   for (BinauralRenderer &renderer : m_binaural)
     renderer.reset();
   if (m_sink) {
+    m_sinkDevice.clear();
     m_sink->reset();
-    startSink();
-    m_sink->setVolume(m_masterVolume);
+    if (m_playing)
+      startSink();
   }
   orchard_audio_engine_reset(m_engine);
 }
@@ -468,9 +470,9 @@ void AudioPipeline::flushPending() {
       return;
     m_primed = true;
   }
-  while (!m_pending.isEmpty()) {
+  while (m_sinkDevice && !m_pending.isEmpty()) {
     const qsizetype free = m_sink->bytesFree();
-    if (free <= 0)
+    if (!m_sinkDevice || free <= 0)
       break;
     const qsizetype amount = std::min(free, m_pending.size());
     const qint64 written = m_sinkDevice->write(m_pending.constData(), amount);

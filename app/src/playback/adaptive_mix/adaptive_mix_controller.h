@@ -14,6 +14,7 @@ class AdaptiveMixController final : public QObject {
   // Reads "standard" while unavailable; the saved choice returns afterwards.
   Q_PROPERTY(QString mode READ mode WRITE setMode NOTIFY modeChanged)
   Q_PROPERTY(bool available READ available NOTIFY modeChanged)
+  Q_PROPERTY(bool requested READ requested NOTIFY modeChanged)
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool ready READ ready NOTIFY changed)
   Q_PROPERTY(QString mixStyle READ mixStyle NOTIFY changed)
@@ -24,6 +25,7 @@ public:
   QString mode() const { return m_available ? m_mode : QStringLiteral("standard"); }
   void setMode(const QString &mode);
   bool available() const { return m_available; }
+  bool requested() const { return m_mode == QStringLiteral("adaptive"); }
   // Qobuz streams aren't analysed, so playback turns adaptive mix off while it's on.
   void setAvailable(bool available);
   bool enabled() const { return mode() == QStringLiteral("adaptive"); }
@@ -78,7 +80,8 @@ private:
   QString m_incomingId;
   double m_outgoingDuration{0};
   double m_incomingDuration{0};
-  bool m_available{true};
+  const bool m_workerInstalled{AdaptiveMixWorker::installed()};
+  bool m_available{m_workerInstalled};
   bool m_preparing{false};
   bool m_failed{false};
   bool m_keepBoundary{false};

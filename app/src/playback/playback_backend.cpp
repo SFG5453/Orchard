@@ -132,9 +132,16 @@ void PlaybackController::wirePlayer(QMediaPlayer *source) {
                                      error == QMediaPlayer::NetworkError;
               scheduleStreamRecovery(retryable, message);
             }
-            // An empty source means the error belongs to a preload already torn down.
-            else if (source == m_nextPlayer && !source->source().isEmpty())
-              failPreparedTrack(0);
+            else if (source == m_nextPlayer) {
+              const auto url = source->source();
+              const auto token = m_preparedResolveToken;
+              // Clearing the source can reenter the decoder's error handler.
+              QMetaObject::invokeMethod(this, [this, source, url, token] {
+                if (source == m_nextPlayer && source->source() == url &&
+                    token == m_preparedResolveToken)
+                  failPreparedTrack(0);
+              }, Qt::QueuedConnection);
+            }
           });
 }
 

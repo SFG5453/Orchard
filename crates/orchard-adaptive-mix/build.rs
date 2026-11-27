@@ -6,7 +6,10 @@ use std::process::Command;
 fn main() {
     match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
         Ok("linux") => println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN"),
-        Ok("macos") => link_clang_runtime(),
+        Ok("macos") => {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
+            link_clang_runtime();
+        }
         _ => {}
     }
 }
